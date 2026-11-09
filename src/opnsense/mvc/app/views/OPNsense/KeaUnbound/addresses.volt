@@ -5,7 +5,7 @@
 <script>
     $(document).ready(function () {
         $("#grid-addresses").UIBootgrid({
-            search: '/api/keaunbound/addresses/search',
+            search: '/api/keaunbound/addresses/search{{ family }}',
             options: {
                 selection: false,
                 multiSelect: false,

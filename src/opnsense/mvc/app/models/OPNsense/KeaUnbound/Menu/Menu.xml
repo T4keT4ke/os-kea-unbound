@@ -7,7 +7,8 @@
             <Settings order="30" VisibleName="Settings" url="/ui/keaunbound/general"/>
         </KeaUnbound>
         <KeaDHCP>
-            <Addresses order="70" VisibleName="Addresses (leases + reservations)" url="/ui/keaunbound/addresses"/>
+            <AllLeases4 order="70" VisibleName="All Leases IPv4" url="/ui/keaunbound/addresses"/>
+            <AllLeases6 order="80" VisibleName="All Leases IPv6" url="/ui/keaunbound/addresses/v6"/>
         </KeaDHCP>
     </Services>
 </menu>

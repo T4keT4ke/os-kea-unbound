@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 # Copyright (c) 2026 James (JameZUK)
 """
-Emit every address Kea has handed out or reserved as a JSON array for the
-Addresses page: active leases plus static reservations (including those whose
+Emit every address of one family (argv[1]: 4|6) Kea has handed out or reserved as a JSON array for the
+"All Leases" pages: active leases plus static reservations (including those whose
 device currently holds no lease), so "which IPs are taken" is one list.
 
 Row: address, type (static|dynamic), status (active|reserved), hostname, hwaddr,
@@ -94,10 +94,10 @@ def _leases(family):
 
 
 def main():
-    resv, leases = [], []
-    for fam, path in (("4", kea_source.KEA4), ("6", kea_source.KEA6)):
-        resv += reservation_rows(kea_source._load_json(path), fam)
-        leases += _leases(fam)
+    fam = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ("4", "6") else "4"
+    path = kea_source.KEA4 if fam == "4" else kea_source.KEA6
+    resv = reservation_rows(kea_source._load_json(path), fam)
+    leases = _leases(fam)
     print(json.dumps(build_rows(resv, leases)))
 
 

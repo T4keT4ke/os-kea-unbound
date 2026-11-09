@@ -16,7 +16,15 @@ class AddressesController extends \OPNsense\Base\IndexController
 {
     public function indexAction()
     {
-        $this->view->title = gettext('Kea Unbound DDNS - Addresses');
+        $this->view->title = gettext('Kea Unbound DDNS - All Leases IPv4');
+        $this->view->family = '4';
+        $this->view->pick('OPNsense/KeaUnbound/addresses');
+    }
+
+    public function v6Action()
+    {
+        $this->view->title = gettext('Kea Unbound DDNS - All Leases IPv6');
+        $this->view->family = '6';
         $this->view->pick('OPNsense/KeaUnbound/addresses');
     }
 }

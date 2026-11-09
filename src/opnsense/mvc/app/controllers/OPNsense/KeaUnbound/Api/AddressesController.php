@@ -7,11 +7,30 @@
 
 namespace OPNsense\KeaUnbound\Api;
 
+use OPNsense\Core\Backend;
+
 /**
- * Search endpoint for the Addresses page: Kea leases + reservations, same
- * bootgrid contract as the Records page (only the configd action differs).
+ * Search endpoints for the "All Leases" pages: Kea leases + reservations per
+ * family, same bootgrid contract as the Records page.
  */
 class AddressesController extends RecordsController
 {
-    protected $configdAction = 'keaunbound addresses';
+    private $family = '4';
+
+    protected function fetchRows()
+    {
+        return (string)(new Backend())->configdpRun('keaunbound addresses', [$this->family]);
+    }
+
+    public function search4Action()
+    {
+        $this->family = '4';
+        return $this->searchAction();
+    }
+
+    public function search6Action()
+    {
+        $this->family = '6';
+        return $this->searchAction();
+    }
 }
