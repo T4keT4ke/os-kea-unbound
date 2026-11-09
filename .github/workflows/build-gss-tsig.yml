@@ -1,0 +1,43 @@
+# Builds Kea's GSS-TSIG hook (libddns_gss_tsig.so) the way OPNsense builds Kea
+# (opnsense/ports opnsense/kea: meson, openssl, no auto-features) plus -Dkrb5=enabled.
+# OPNsense's kea package ships without the hook (FreeBSD port option KERBEROS is off).
+name: build-gss-tsig
+on:
+  workflow_dispatch:
+    inputs:
+      kea_version:
+        description: Kea version (must equal the firewall's kea package)
+        default: "3.0.4"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build on FreeBSD 15.1
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          usesh: true
+          envs: KEA_VERSION
+          prepare: |
+            pkg install -y meson ninja pkgconf boost-libs log4cplus openssl35 python3
+          run: |
+            set -eux
+            fetch -q "https://downloads.isc.org/isc/kea/${KEA_VERSION}/kea-${KEA_VERSION}.tar.xz"
+            sha256 "kea-${KEA_VERSION}.tar.xz"
+            tar xf "kea-${KEA_VERSION}.tar.xz"
+            cd "kea-${KEA_VERSION}"
+            export PKG_CONFIG_PATH=/usr/local/libdata/pkgconfig
+            meson setup _build --prefix=/usr/local --auto-features=disabled \
+              -Dcrypto=openssl -Dnetconf=disabled -Dkrb5=enabled
+            ninja -C _build src/hooks/d2/gss_tsig/libddns_gss_tsig.so
+            mkdir -p ../out
+            cp _build/src/hooks/d2/gss_tsig/libddns_gss_tsig.so ../out/
+            readelf -d ../out/libddns_gss_tsig.so | grep -E 'NEEDED|RPATH|RUNPATH' | tee ../out/needed.txt
+        env:
+          KEA_VERSION: ${{ inputs.kea_version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libddns_gss_tsig-${{ inputs.kea_version }}
+          path: out/

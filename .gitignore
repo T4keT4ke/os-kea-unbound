@@ -18,3 +18,5 @@ __pycache__/
 *.png
 # ...but keep the committed documentation screenshots
 !docs/img/*.png
+ptr/
+.DS_Store
