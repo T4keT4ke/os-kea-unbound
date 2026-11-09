@@ -42,6 +42,25 @@ def test_patch_dhcp_global_and_subnet_override(tmp_path):
     assert m.patch_dhcp(str(p), "Dhcp4", SETTINGS) is False  # idempotent
 
 
+def test_patch_dhcp_strips_subnet_update_on_renew_false(tmp_path):
+    # core emits a per-subnet "ddns-update-on-renew": false that overrides our global
+    # true; strip it (only when the setting is on), keep an explicit true.
+    m = load_injector(tmp_path)
+    p = tmp_path / "k4.json"
+    json.dump({"Dhcp4": {"subnet4": [
+        {"subnet": "10.0.0.0/24", "ddns-update-on-renew": False},
+        {"subnet": "10.1.0.0/24", "ddns-update-on-renew": True},
+    ]}}, open(p, "w"))
+    assert m.patch_dhcp(str(p), "Dhcp4", SETTINGS) is True
+    subs = json.load(open(p))["Dhcp4"]["subnet4"]
+    assert "ddns-update-on-renew" not in subs[0] and subs[1]["ddns-update-on-renew"] is True
+    off = tmp_path / "off.json"
+    json.dump({"Dhcp4": {"subnet4": [{"subnet": "10.0.0.0/24", "ddns-update-on-renew": False}]}},
+              open(off, "w"))
+    m.patch_dhcp(str(off), "Dhcp4", dict(SETTINGS, update_on_renew=False))
+    assert json.load(open(off))["Dhcp4"]["subnet4"][0]["ddns-update-on-renew"] is False
+
+
 def test_patch_dhcp_per_subnet_suffix(tmp_path):
     # issue #17: a subnet with its own domain-name option gets a per-subnet
     # ddns-qualifying-suffix; one matching the global, or with no domain, inherits.

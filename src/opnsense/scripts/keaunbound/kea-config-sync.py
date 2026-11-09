@@ -200,6 +200,10 @@ def patch_dhcp(path, root_key, s):
         for sn in (container.get(subnet_key, []) or []):
             if sn.get("ddns-send-updates") is False:
                 sn.pop("ddns-send-updates", None)
+            # Same for ddns-update-on-renew: core writes a per-subnet false, which would
+            # silence renewals (reservations, unchanged leases) despite our global true.
+            if node["ddns-update-on-renew"] and sn.get("ddns-update-on-renew") is False:
+                sn.pop("ddns-update-on-renew", None)
             # Per-subnet qualifying suffix (issue #17): give the subnet its own
             # ddns-qualifying-suffix (from its domain-name option) when it differs
             # from the global; Kea honours subnet scope over the root value. When it
