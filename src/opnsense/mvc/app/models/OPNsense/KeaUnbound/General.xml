@@ -67,6 +67,16 @@
                 <Mask>/^[0-9A-Za-z._\/@-]{0,255}$/u</Mask>
                 <description>Kerberos principal Kea uses, e.g. DHCP/fw.ad.example.com@AD.EXAMPLE.COM.</description>
             </gss_client_principal>
+            <gss_kdc type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z.:,;\s_-]{0,1024}$/u</Mask>
+                <description>Kerberos KDCs (the domain controllers), separated by comma or space. Used to generate krb5.conf.</description>
+            </gss_kdc>
+            <gss_domain type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z._-]{0,255}$/u</Mask>
+                <description>DNS domain mapped to the realm, e.g. ad.example.com (optional).</description>
+            </gss_domain>
             <gss_keytab type="TextField">
                 <Default>/usr/local/etc/kea/dhcp.keytab</Default>
                 <Required>N</Required>

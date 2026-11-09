@@ -248,6 +248,22 @@ def test_patch_d2_gss_falls_back_when_hook_unusable(tmp_path):
     assert [h["library"] for h in json.load(open(p))["DhcpDdns"]["hooks-libraries"]] == ["/other.so"]
 
 
+def test_write_krb5_conf(tmp_path):
+    m = load_injector(tmp_path)
+    p = tmp_path / "krb5.conf"
+    s = dict(GSS, gss_kdc="10.0.0.1, 10.0.0.2", gss_domain="AD.Example.com.")
+    assert m.write_krb5_conf(s, str(p)) is True
+    t = p.read_text()
+    assert "default_realm = AD.EXAMPLE.COM" in t and "kdc = 10.0.0.2" in t
+    assert ".ad.example.com = AD.EXAMPLE.COM" in t and "rdns = false" in t
+    assert m.write_krb5_conf(s, str(p)) is False                       # unchanged
+    assert m.write_krb5_conf(dict(s, gss_kdc="10.0.0.9"), str(p)) is True   # ours -> update
+    p.write_text("[libdefaults]\n  default_realm = HAND.MADE\n")        # user's own file
+    assert m.write_krb5_conf(s, str(p)) is False
+    assert "HAND.MADE" in p.read_text()
+    assert m.write_krb5_conf(dict(s, gss_kdc=""), str(tmp_path / "x")) is False   # no KDC: hands off
+
+
 def test_patch_dhcp_authoritative(tmp_path):
     m = load_injector(tmp_path)
     for key, want in (("Dhcp4", True), ("Dhcp6", False)):

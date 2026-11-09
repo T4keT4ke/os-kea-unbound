@@ -185,9 +185,11 @@ Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
    `setspn -S DHCP/fw.ad.example.com kea` and
    `ktpass -princ DHCP/fw.ad.example.com@AD.EXAMPLE.COM -mapuser kea +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL -out dhcp.keytab`
 2. **Firewall:** copy the keytab to `/usr/local/etc/kea/dhcp.keytab` (`chmod 600`),
-   install `pkg install krb5`, and configure Kerberos (realm and KDC in `krb5.conf`, at
-   the path your Kerberos library reads). Time must be in sync with the DC.
-3. **Plugin settings:** tick *GSS-TSIG*, enter realm and client principal, add the DNS
+   install `pkg install krb5`. Time must be in sync with the DC. `krb5.conf` can come
+   from the plugin: enter the KDCs (and optionally the DNS domain) in the settings and
+   it writes `/usr/local/etc/krb5.conf` (the file is marked as managed; a `krb5.conf`
+   you made yourself is never overwritten). Leave the KDC field empty to manage it by hand.
+3. **Plugin settings:** tick *GSS-TSIG*, enter realm, KDCs and client principal, add the DNS
    servers' host names under *GSS DNS servers* (`10.0.0.10 = dc01.ad.example.com`) and
    end the zone's line in *Reverse zones* with `gss`:
    `10.in-addr.arpa = 10.0.0.10, 10.0.0.11 gss`. Switch the zone to *Secure only* in

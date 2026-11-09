@@ -39,6 +39,20 @@
         <help>Upper-case realm, e.g. AD.EXAMPLE.COM.</help>
     </field>
     <field>
+        <id>general.general.gss_kdc</id>
+        <label>Kerberos KDCs</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>The domain controllers, comma or space separated, e.g. 192.0.2.10 192.0.2.11. The plugin generates /usr/local/etc/krb5.conf from realm, KDCs and domain, but never overwrites a krb5.conf it did not write itself. Leave empty to manage krb5.conf by hand.</help>
+    </field>
+    <field>
+        <id>general.general.gss_domain</id>
+        <label>Kerberos DNS domain</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Optional: DNS domain mapped to the realm, e.g. ad.example.com.</help>
+    </field>
+    <field>
         <id>general.general.gss_client_principal</id>
         <label>Client principal</label>
         <type>text</type>

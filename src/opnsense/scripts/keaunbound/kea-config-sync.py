@@ -35,6 +35,7 @@ import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import suffix as suffixmod  # noqa: E402
 from lib import reverse as reversemod  # noqa: E402
+from lib import krb5 as krb5mod  # noqa: E402
 
 CONFIG = "/conf/config.xml"
 KEA4 = "/usr/local/etc/kea/kea-dhcp4.conf"
@@ -43,6 +44,7 @@ D2 = "/usr/local/etc/kea/kea-dhcp-ddns.conf"
 LOG = "/var/log/keaunbound/keaunbound.log"
 HOOK = "/usr/local/lib/kea/hooks/libddns_gss_tsig.so"   # separate package, optional
 KEA_DDNS = "/usr/local/sbin/kea-dhcp-ddns"
+KRB5_CONF = "/usr/local/etc/krb5.conf"   # read by the krb5 package (after /etc/krb5.conf)
 
 CATCHALL_FWD = "."
 CATCHALL_REV = ("in-addr.arpa.", "ip6.arpa.")
@@ -101,6 +103,8 @@ def load_settings():
         "gss_keytab": _text(gen, "gss_keytab", "/usr/local/etc/kea/dhcp.keytab"),
         "gss_replay": _text(gen, "gss_replay", "0") == "1",
         "gss_servers_text": _text(gen, "gss_servers"),
+        "gss_kdc": _text(gen, "gss_kdc"),
+        "gss_domain": _text(gen, "gss_domain"),
     }
 
 
@@ -245,6 +249,31 @@ def _d2_check(cfg):
             os.remove(tmp)
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def write_krb5_conf(s, path=None):
+    """Generate krb5.conf from the settings, but only over a file this plugin wrote
+    (marker) or when none exists: a hand-made Kerberos config is never touched."""
+    path = path or KRB5_CONF
+    if not (s.get("gss_enabled") and s.get("gss_realm") and s.get("gss_kdc")):
+        return False
+    text = krb5mod.render_krb5_conf(s["gss_realm"], krb5mod.parse_kdcs(s["gss_kdc"]),
+                                    s.get("gss_domain", ""))
+    try:
+        with open(path) as f:
+            old = f.read()
+    except FileNotFoundError:
+        old = None
+    except OSError:
+        return False
+    if old is not None and krb5mod.MARKER not in old:
+        log("%s exists and is not managed by this plugin; leaving it alone" % path)
+        return False
+    if old == text:
+        return False
+    _write_atomic(path, text)
+    log("wrote %s for realm %s" % (path, s["gss_realm"]))
+    return True
 
 
 def gss_hook_entry(s, zones):
@@ -397,6 +426,8 @@ def main():
     s["d2_ip"], s["d2_port"] = _d2_listen(D2)
     s["suffixes"] = _collect_suffixes(s["suffix"])
     changed = []
+    if write_krb5_conf(s):
+        changed.append("krb5.conf")
     if patch_dhcp(KEA4, "Dhcp4", s):
         changed.append("dhcp4")
     if patch_dhcp(KEA6, "Dhcp6", s):
