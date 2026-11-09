@@ -186,7 +186,7 @@ def test_patch_d2_reverse_zones(tmp_path):
         {"name": "124.10.in-addr.arpa.", "dns-servers": [{"ip-address": "1.1.1.1"}]},
         {"name": "5.5.5.in-addr.arpa.", "dns-servers": [{"ip-address": "10.0.0.53"}]}]}}},
         open(p, "w"))
-    s = dict(SETTINGS, reverse_zones=[("124.10.in-addr.arpa.", ["10.124.1.14", "10.124.0.8"])])
+    s = dict(SETTINGS, reverse_zones=[("124.10.in-addr.arpa.", ["10.124.1.14", "10.124.0.8"], False)])
     assert m.patch_d2(str(p), s) is True
     rev = json.load(open(p))["DhcpDdns"]["reverse-ddns"]["ddns-domains"]
     assert [d["name"] for d in rev] == ["5.5.5.in-addr.arpa.", "124.10.in-addr.arpa.",
@@ -196,6 +196,56 @@ def test_patch_d2_reverse_zones(tmp_path):
                                    {"ip-address": "10.124.0.8", "port": 53}]
     assert "key-name" not in ours
     assert m.patch_d2(str(p), s) is False                      # idempotent
+
+
+GSS = dict(SETTINGS, gss_enabled=True, gss_realm="AD.EXAMPLE.COM",
+           gss_client_principal="DHCP/fw.ad.example.com@AD.EXAMPLE.COM",
+           gss_keytab="/usr/local/etc/kea/dhcp.keytab", gss_replay=False,
+           gss_servers={"10.0.0.1": "dc01.ad.example.com"},
+           reverse_zones=[("10.in-addr.arpa.", ["10.0.0.1", "10.0.0.2"], True),
+                          ("11.in-addr.arpa.", ["10.0.0.3"], False)])
+
+
+def _gss_d2(tmp_path, m, check=True, hook_present=True):
+    hook = tmp_path / "libddns_gss_tsig.so"
+    if hook_present:
+        hook.write_text("x")
+    m.HOOK = str(hook)
+    m._d2_check = lambda cfg: check
+    p = tmp_path / "d2.json"
+    json.dump({"DhcpDdns": {"hooks-libraries": [{"library": "/other.so"}]}}, open(p, "w"))
+    return p
+
+
+def test_patch_d2_gss_hook(tmp_path):
+    m = load_injector(tmp_path)
+    p = _gss_d2(tmp_path, m)
+    assert m.patch_d2(str(p), GSS) is True
+    hooks = json.load(open(p))["DhcpDdns"]["hooks-libraries"]
+    assert [h["library"] for h in hooks] == ["/other.so", m.HOOK]          # other hook kept
+    par = hooks[1]["parameters"]
+    assert par["client-principal"] == "DHCP/fw.ad.example.com@AD.EXAMPLE.COM"
+    assert par["client-keytab"] == "FILE:/usr/local/etc/kea/dhcp.keytab"
+    assert par["gss-replay-flag"] is False
+    # only servers of `gss` zones that have a name in the GSS server list
+    assert par["servers"] == [{"id": "dns-10.0.0.1", "ip-address": "10.0.0.1", "port": 53,
+                               "server-principal": "DNS/dc01.ad.example.com@AD.EXAMPLE.COM"}]
+    assert m.patch_d2(str(p), GSS) is False                                # idempotent
+
+
+def test_patch_d2_gss_falls_back_when_hook_unusable(tmp_path):
+    # hook file missing, or kea-dhcp-ddns -t rejects it: D2 config stays without our
+    # hook (other hooks untouched) instead of risking D2 failing to start.
+    for kw in ({"hook_present": False}, {"check": False}):
+        m = load_injector(tmp_path)
+        p = _gss_d2(tmp_path, m, **kw)
+        m.patch_d2(str(p), GSS)
+        hooks = json.load(open(p))["DhcpDdns"]["hooks-libraries"]
+        assert [h["library"] for h in hooks] == ["/other.so"]
+    m = load_injector(tmp_path)
+    p = _gss_d2(tmp_path, m)
+    m.patch_d2(str(p), dict(GSS, gss_enabled=False))                       # disabled -> none
+    assert [h["library"] for h in json.load(open(p))["DhcpDdns"]["hooks-libraries"]] == ["/other.so"]
 
 
 def test_patch_dhcp_authoritative(tmp_path):

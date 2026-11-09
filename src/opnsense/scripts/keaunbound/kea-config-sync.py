@@ -26,6 +26,7 @@ Safety (Phase 4.5):
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -40,6 +41,8 @@ KEA4 = "/usr/local/etc/kea/kea-dhcp4.conf"
 KEA6 = "/usr/local/etc/kea/kea-dhcp6.conf"
 D2 = "/usr/local/etc/kea/kea-dhcp-ddns.conf"
 LOG = "/var/log/keaunbound/keaunbound.log"
+HOOK = "/usr/local/lib/kea/hooks/libddns_gss_tsig.so"   # separate package, optional
+KEA_DDNS = "/usr/local/sbin/kea-dhcp-ddns"
 
 CATCHALL_FWD = "."
 CATCHALL_REV = ("in-addr.arpa.", "ip6.arpa.")
@@ -92,6 +95,12 @@ def load_settings():
         "tsig_algo": KEA_ALGO.get(_text(gen, "tsig_algorithm", "hmac-sha256"), "HMAC-SHA256"),
         "authoritative": _text(gen, "authoritative", "0") == "1",
         "reverse_zones_text": _text(gen, "reverse_zones"),
+        "gss_enabled": _text(gen, "gss_enabled", "0") == "1",
+        "gss_realm": _text(gen, "gss_realm").upper(),
+        "gss_client_principal": _text(gen, "gss_client_principal"),
+        "gss_keytab": _text(gen, "gss_keytab", "/usr/local/etc/kea/dhcp.keytab"),
+        "gss_replay": _text(gen, "gss_replay", "0") == "1",
+        "gss_servers_text": _text(gen, "gss_servers"),
     }
 
 
@@ -221,6 +230,54 @@ def patch_dhcp(path, root_key, s):
     return True
 
 
+def _d2_check(cfg):
+    """True if kea-dhcp-ddns accepts this config (-t): catches a GSS-TSIG hook that
+    won't load (Kea upgraded, hook built for another version) before it can take D2
+    down. Any failure to run the check counts as 'not ok'."""
+    try:
+        fd, tmp = tempfile.mkstemp(suffix=".json")
+        with os.fdopen(fd, "w") as f:
+            json.dump(cfg, f)
+        try:
+            r = subprocess.run([KEA_DDNS, "-t", tmp], capture_output=True, timeout=20)
+            return r.returncode == 0
+        finally:
+            os.remove(tmp)
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def gss_hook_entry(s, zones):
+    """hooks-libraries entry for the GSS-TSIG hook covering the zones flagged `gss`, or
+    None (with a log line) when it can't be configured."""
+    gss_zones = [(z, ips) for z, ips, gss in zones if gss]
+    if not gss_zones:
+        return None
+    if not (s.get("gss_realm") and s.get("gss_client_principal")):
+        log("GSS-TSIG zones configured but realm/client principal missing; not enabled")
+        return None
+    servers, seen = [], set()
+    for zone, ips in gss_zones:
+        for ip in ips:
+            fqdn = (s.get("gss_servers") or {}).get(ip)
+            if not fqdn:
+                log("GSS-TSIG: no DNS server name for %s (zone %s); add it to the GSS server list"
+                    % (ip, zone))
+            elif ip not in seen:
+                seen.add(ip)
+                servers.append({"id": "dns-" + ip.replace(":", "-"), "ip-address": ip,
+                                "port": 53,
+                                "server-principal": "DNS/%s@%s" % (fqdn, s["gss_realm"])})
+    if not servers:
+        return None
+    return {"library": HOOK, "parameters": {
+        "client-principal": s["gss_client_principal"],
+        "client-keytab": "FILE:" + s["gss_keytab"],
+        "gss-replay-flag": bool(s.get("gss_replay")),
+        "servers": servers,
+    }}
+
+
 def patch_d2(path, s):
     cfg = _load_json(path)
     if not isinstance(cfg, dict) or not isinstance(cfg.get("DhcpDdns"), dict):
@@ -261,14 +318,14 @@ def patch_d2(path, s):
     # to the given DNS servers, unsigned; D2 picks the longest matching zone) and
     # (re)add our in-addr.arpa./ip6.arpa. catch-alls for everything else.
     zones = s.get("reverse_zones") or []
-    our_zone_names = {z for z, _ in zones}
+    our_zone_names = {z for z, _ips, _gss in zones}
     rev = (d2.get("reverse-ddns") or {}).get("ddns-domains") or []
     user_rev = [d for d in rev if d.get("name") not in CATCHALL_REV
                 and d.get("name") not in our_zone_names]
     if user_rev:
         log("preserving %d user reverse DDNS domain(s); adding catch-all" % len(user_rev))
     ours = [{"name": z, "dns-servers": [{"ip-address": ip, "port": 53} for ip in ips]}
-            for z, ips in zones]
+            for z, ips, _gss in zones]
     d2["reverse-ddns"] = {"ddns-domains": user_rev + ours + [catchall(n) for n in CATCHALL_REV]}
 
     # TSIG: keep user keys (different name), (re)add ours.
@@ -277,6 +334,28 @@ def patch_d2(path, s):
         keys = [k for k in keys if k.get("name") != keyname]
         keys.append({"name": keyname, "algorithm": s["tsig_algo"], "secret": s["tsig_secret"]})
     d2["tsig-keys"] = keys
+
+    # GSS-TSIG hook: our entry replaces any earlier one; other hooks stay. Only kept when
+    # kea-dhcp-ddns actually accepts it, so a hook that doesn't match the installed Kea
+    # can't stop D2 (the GSS zones then fall back to unsigned updates, which a
+    # secure-only zone refuses, and the log says why).
+    hooks = [h for h in (d2.get("hooks-libraries") or []) if h.get("library") != HOOK]
+    entry = gss_hook_entry(s, zones) if s.get("gss_enabled") else None
+    if entry and not os.path.exists(HOOK):
+        log("GSS-TSIG enabled but %s is not installed (package os-kea-unbound-gss-tsig)" % HOOK)
+        entry = None
+    if entry:
+        d2["hooks-libraries"] = hooks + [entry]
+        if not _d2_check(cfg):
+            log("GSS-TSIG hook rejected by kea-dhcp-ddns -t (version mismatch or bad "
+                "parameters?); running without it")
+            entry = None
+    if entry:
+        pass
+    elif hooks:
+        d2["hooks-libraries"] = hooks
+    else:
+        d2.pop("hooks-libraries", None)
 
     if json.dumps(d2, sort_keys=True) == before:
         return False
@@ -312,6 +391,9 @@ def main():
     s["reverse_zones"], bad = reversemod.parse_reverse_zones(s.get("reverse_zones_text", ""))
     for line in bad:
         log("ignoring invalid reverse zone line: %r" % line)
+    s["gss_servers"], bad = reversemod.parse_gss_servers(s.get("gss_servers_text", ""))
+    for line in bad:
+        log("ignoring invalid GSS server line: %r" % line)
     s["d2_ip"], s["d2_port"] = _d2_listen(D2)
     s["suffixes"] = _collect_suffixes(s["suffix"])
     changed = []

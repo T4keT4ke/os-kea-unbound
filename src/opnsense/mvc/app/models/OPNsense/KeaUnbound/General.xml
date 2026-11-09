@@ -52,6 +52,37 @@
                 <Mask>/^[0-9A-Za-z.:,;=#\s_-]{0,4096}$/u</Mask>
                 <description>Reverse zones whose PTR records Kea registers directly at an external DNS server, one per line: zone = server[, fallback server].</description>
             </reverse_zones>
+            <gss_enabled type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+                <description>Sign PTR updates for zones marked "gss" with GSS-TSIG (Kerberos). Needs the os-kea-unbound-gss-tsig package.</description>
+            </gss_enabled>
+            <gss_realm type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z._-]{0,255}$/u</Mask>
+                <description>Kerberos realm, e.g. AD.EXAMPLE.COM.</description>
+            </gss_realm>
+            <gss_client_principal type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z._\/@-]{0,255}$/u</Mask>
+                <description>Kerberos principal Kea uses, e.g. DHCP/fw.ad.example.com@AD.EXAMPLE.COM.</description>
+            </gss_client_principal>
+            <gss_keytab type="TextField">
+                <Default>/usr/local/etc/kea/dhcp.keytab</Default>
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z._\/-]{0,255}$/u</Mask>
+                <description>Path of the keytab file for the client principal (readable by root only).</description>
+            </gss_keytab>
+            <gss_replay type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+                <description>GSS anti-replay service. Off by default: Microsoft DNS servers can reject updates with it.</description>
+            </gss_replay>
+            <gss_servers type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z.:=#\s_-]{0,4096}$/u</Mask>
+                <description>Names of the DNS servers used with GSS-TSIG, one per line: ip = fqdn.</description>
+            </gss_servers>
             <aggressive_cleanup type="BooleanField">
                 <Default>1</Default>
                 <Required>Y</Required>

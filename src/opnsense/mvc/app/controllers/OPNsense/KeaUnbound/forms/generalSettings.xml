@@ -22,7 +22,49 @@
         <label>Reverse zones (PTR)</label>
         <type>textbox</type>
         <advanced>true</advanced>
-        <help>Register PTR records for these reverse zones directly at an external DNS server (e.g. Active Directory), unsigned: the zone must allow non-secure dynamic updates. One zone per line, "zone = server[, fallback]", e.g. 10.in-addr.arpa = 192.0.2.10, 192.0.2.11. Zones listed here are not written to Unbound. Lines starting with # are comments.</help>
+        <help>Register PTR records for these reverse zones directly at an external DNS server (e.g. Active Directory). One zone per line, "zone = server[, fallback]", e.g. 10.in-addr.arpa = 192.0.2.10, 192.0.2.11. Plain lines are sent unsigned (the zone must allow non-secure updates); add the word gss at the end to sign with GSS-TSIG instead. Zones listed here are not written to Unbound. Lines starting with # are comments.</help>
+    </field>
+    <field>
+        <id>general.general.gss_enabled</id>
+        <label>GSS-TSIG (Kerberos)</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Sign PTR updates for reverse zones marked "gss" with GSS-TSIG. Requires the os-kea-unbound-gss-tsig package, a Kerberos setup (krb5.conf) and a keytab. Without the package the zones fall back to unsigned updates.</help>
+    </field>
+    <field>
+        <id>general.general.gss_realm</id>
+        <label>Kerberos realm</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Upper-case realm, e.g. AD.EXAMPLE.COM.</help>
+    </field>
+    <field>
+        <id>general.general.gss_client_principal</id>
+        <label>Client principal</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Principal of the keytab, e.g. DHCP/fw.ad.example.com@AD.EXAMPLE.COM.</help>
+    </field>
+    <field>
+        <id>general.general.gss_keytab</id>
+        <label>Keytab file</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Path of the keytab on the firewall (mode 600, owned by root). Default /usr/local/etc/kea/dhcp.keytab.</help>
+    </field>
+    <field>
+        <id>general.general.gss_servers</id>
+        <label>GSS DNS servers</label>
+        <type>textbox</type>
+        <advanced>true</advanced>
+        <help>The DNS servers of "gss" zones with their host names, one per line: ip = fqdn, e.g. 192.0.2.10 = dc01.ad.example.com. The service principal becomes DNS/fqdn@REALM.</help>
+    </field>
+    <field>
+        <id>general.general.gss_replay</id>
+        <label>GSS anti-replay</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Enable the GSS anti-replay service. Leave off for Microsoft DNS unless you know it works.</help>
     </field>
     <field>
         <id>general.general.aggressive_cleanup</id>

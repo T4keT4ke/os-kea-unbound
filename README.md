@@ -53,7 +53,8 @@ for as long as the lease is valid.
 - **Reverse zones (PTR)** *(experimental, not yet field-tested)*: register PTR records for
   listed reverse zones straight at an external DNS server through Kea's DDNS daemon
   (D2), replacing hand-made `nsupdate` hook scripts. Needs zones that allow
-  non-secure dynamic updates; GSS-TSIG (Kerberos) is not wired in yet. See *Configure*.
+  non-secure dynamic updates, or sign them with **GSS-TSIG** (Kerberos) for secure-only
+  zones. See *Configure* and *[GSS-TSIG](#gss-tsig-kerberos-signed-updates)*.
 - **Authoritative DHCPv4** *(experimental, not yet field-tested)*: Kea answers requests for
   unknown addresses with a NAK right away instead of ignoring them.
 
@@ -129,6 +130,7 @@ it — the plugin wires up Kea's DDNS, generates a TSIG key, and seeds existing 
 | Qualifying suffix | *(firewall domain)* | The forward zone; blank uses the system domain. |
 | Authoritative DHCPv4 | off | Kea answers requests for unknown addresses with a NAK at once. |
 | Reverse zones (PTR) † | *(empty)* | Experimental. Register PTRs for listed reverse zones straight at an external DNS server (e.g. Active Directory), one line per zone: `124.10.in-addr.arpa = 10.124.1.14, 10.124.0.8` (first server, then fallback). Sent via Kea's DDNS daemon **unsigned**, so the zone must allow non-secure dynamic updates. Listed zones are not written to Unbound. Applies after the next Kea config regeneration (Save/Apply in Kea). |
+| GSS-TSIG (Kerberos) † | off | Experimental. Sign PTR updates for reverse zones that end in `gss`. Needs the `os-kea-unbound-gss-tsig` package, realm, client principal, keytab and the DNS servers' host names (see below). |
 | Aggressive cleanup | on | Drop a host's old address when it moves to a new one. |
 | Update on renew † | on | Refresh DNS on renewals, not just first grant. |
 | TSIG authentication | on | Sign updates with an auto-generated key (unsigned/wrong-key are rejected). |
@@ -156,6 +158,42 @@ and reverse. Subnets you don't touch keep using the global suffix, so this is fu
 opt-in. Behind the scenes the plugin gives each subnet its own Kea
 `ddns-qualifying-suffix` and registers a DDNS forward zone per distinct domain, so every
 suffix is routed to the listener correctly.
+
+### GSS-TSIG (Kerberos-signed updates)
+
+*Experimental: the Kea hook loads on OPNsense 26.7, but signed updates against Active
+Directory have not been field-tested yet.*
+
+OPNsense's Kea package ships **without** the GSS-TSIG hook (`libddns_gss_tsig.so`), although
+the code is part of the open-source Kea since 3.0. This fork builds it in CI
+(`.github/workflows/build-gss-tsig.yml`) against OPNsense's own libraries and ships it as
+a separate package, which must match the installed `kea` version exactly:
+
+```sh
+pkg add https://github.com/T4keT4ke/os-kea-unbound/releases/download/v0.17.0/os-kea-unbound-gss-tsig-3.0.4.pkg
+```
+
+Without it the plugin works as before; zones marked `gss` then fall back to unsigned
+updates and the plugin log says why. Before using the hook, the plugin checks it with
+`kea-dhcp-ddns -t`, so a hook that doesn't fit the installed Kea (e.g. after an OPNsense
+update that changed Kea) is left out instead of stopping the DDNS daemon. Rebuild the
+hook for the new Kea version (run the workflow with that version) when that happens.
+
+Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
+
+1. **AD:** create a user for the firewall, set its SPN and export a keytab on a DC:
+   `setspn -S DHCP/fw.ad.example.com kea` and
+   `ktpass -princ DHCP/fw.ad.example.com@AD.EXAMPLE.COM -mapuser kea +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL -out dhcp.keytab`
+2. **Firewall:** copy the keytab to `/usr/local/etc/kea/dhcp.keytab` (`chmod 600`),
+   install `pkg install krb5`, and configure Kerberos (realm and KDC in `krb5.conf`, at
+   the path your Kerberos library reads). Time must be in sync with the DC.
+3. **Plugin settings:** tick *GSS-TSIG*, enter realm and client principal, add the DNS
+   servers' host names under *GSS DNS servers* (`10.0.0.10 = dc01.ad.example.com`) and
+   end the zone's line in *Reverse zones* with `gss`:
+   `10.in-addr.arpa = 10.0.0.10, 10.0.0.11 gss`. Switch the zone to *Secure only* in
+   Windows once it works.
+4. The reverse zone must exist in Windows DNS; a missing one gives the cryptic
+   *"Packet was replayed in wrong direction"* error.
 
 ## Status & Records
 
