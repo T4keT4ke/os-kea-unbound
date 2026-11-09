@@ -21,7 +21,21 @@ jobs:
           usesh: true
           envs: KEA_VERSION
           prepare: |
-            pkg install -y meson ninja pkgconf boost-libs log4cplus openssl35 python3
+            set -eux
+            pkg install -y meson ninja pkgconf python3
+            # Build against OPNsense's own packages (same boost/log4cplus/openssl as the
+            # firewall's kea), not FreeBSD's, so the hook's library ABI matches.
+            mkdir -p /usr/local/etc/pkg/repos
+            cat > /usr/local/etc/pkg/repos/OPNsense.conf <<'CONF'
+            OPNsense: {
+              url: "pkg+https://pkg.opnsense.org/${ABI}/26.7/latest",
+              signature_type: "none",
+              enabled: yes
+            }
+            CONF
+            pkg update -r OPNsense
+            pkg install -y -r OPNsense boost-libs log4cplus openssl35
+            pkg info boost-libs log4cplus openssl35 | grep -E '^Name|^Version'
           run: |
             set -eux
             fetch -q "https://downloads.isc.org/isc/kea/${KEA_VERSION}/kea-${KEA_VERSION}.tar.xz"
