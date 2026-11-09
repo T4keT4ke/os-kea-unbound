@@ -28,7 +28,7 @@ jobs:
             mkdir -p /usr/local/etc/pkg/repos
             cat > /usr/local/etc/pkg/repos/OPNsense.conf <<'CONF'
             OPNsense: {
-              url: "pkg+https://pkg.opnsense.org/${ABI}/26.7/latest",
+              url: "https://pkg.opnsense.org/${ABI}/26.7/latest",
               signature_type: "none",
               enabled: yes
             }
