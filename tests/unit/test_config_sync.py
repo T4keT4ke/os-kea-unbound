@@ -198,7 +198,7 @@ def test_patch_d2_reverse_zones(tmp_path):
     assert m.patch_d2(str(p), s) is False                      # idempotent
 
 
-GSS = dict(SETTINGS, gss_enabled=True, gss_realm="AD.EXAMPLE.COM",
+GSS = dict(SETTINGS, gss_enabled=True, gss_rekey="120", gss_lifetime="600", gss_realm="AD.EXAMPLE.COM",
            gss_client_principal="DHCP/fw.ad.example.com@AD.EXAMPLE.COM",
            gss_keytab="/usr/local/etc/kea/dhcp.keytab", gss_replay=False,
            gss_servers={"10.0.0.1": "dc01.ad.example.com"},
@@ -227,6 +227,7 @@ def test_patch_d2_gss_hook(tmp_path):
     assert par["client-principal"] == "DHCP/fw.ad.example.com@AD.EXAMPLE.COM"
     assert par["client-keytab"] == "FILE:/usr/local/etc/kea/dhcp.keytab"
     assert par["gss-replay-flag"] is False
+    assert (par["tkey-lifetime"], par["rekey-interval"], par["retry-interval"]) == (600, 120, 30)
     # only servers of `gss` zones that have a name in the GSS server list
     assert par["servers"] == [{"id": "dns-10.0.0.1", "ip-address": "10.0.0.1", "port": 53,
                                "server-principal": "DNS/dc01.ad.example.com@AD.EXAMPLE.COM"}]
@@ -246,6 +247,16 @@ def test_patch_d2_gss_falls_back_when_hook_unusable(tmp_path):
     p = _gss_d2(tmp_path, m)
     m.patch_d2(str(p), dict(GSS, gss_enabled=False))                       # disabled -> none
     assert [h["library"] for h in json.load(open(p))["DhcpDdns"]["hooks-libraries"]] == ["/other.so"]
+
+
+def test_gss_key_times(tmp_path):
+    m = load_injector(tmp_path)
+    assert m.gss_key_times({"gss_rekey": "60", "gss_lifetime": "300"}) == (300, 60, 30)
+    assert m.gss_key_times({"gss_rekey": "31", "gss_lifetime": "900"}) == (900, 31, 30)
+    for bad in ({"gss_rekey": "900", "gss_lifetime": "600"},     # renewal >= lifetime
+                {"gss_rekey": "10", "gss_lifetime": "600"},      # below minimum
+                {"gss_rekey": "x", "gss_lifetime": "600"}):
+        assert m.gss_key_times(bad) == (600, 120, 30)
 
 
 def test_write_krb5_conf(tmp_path):

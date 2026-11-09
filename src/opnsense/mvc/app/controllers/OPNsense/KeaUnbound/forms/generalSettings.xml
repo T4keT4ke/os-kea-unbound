@@ -74,6 +74,20 @@
         <help>The DNS servers of "gss" zones with their host names, one per line: ip = fqdn, e.g. 192.0.2.10 = dc01.ad.example.com. The service principal becomes DNS/fqdn@REALM.</help>
     </field>
     <field>
+        <id>general.general.gss_rekey_interval</id>
+        <label>GSS key renewal (s)</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Seconds after which a fresh GSS-TSIG key is negotiated. A Windows DNS server stopped accepting a key after a few minutes, while Kea's own default keeps it for 45. Default 120; lower it if updates start failing again.</help>
+    </field>
+    <field>
+        <id>general.general.gss_tkey_lifetime</id>
+        <label>GSS key lifetime (s)</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Requested lifetime of a key in seconds; must be longer than the renewal interval. Default 600.</help>
+    </field>
+    <field>
         <id>general.general.gss_replay</id>
         <label>GSS anti-replay</label>
         <type>checkbox</type>

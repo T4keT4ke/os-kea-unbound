@@ -103,6 +103,8 @@ def load_settings():
         "gss_keytab": _text(gen, "gss_keytab", "/usr/local/etc/kea/dhcp.keytab"),
         "gss_replay": _text(gen, "gss_replay", "1") == "1",
         "gss_servers_text": _text(gen, "gss_servers"),
+        "gss_rekey": _text(gen, "gss_rekey_interval", "120"),
+        "gss_lifetime": _text(gen, "gss_tkey_lifetime", "600"),
         "gss_kdc": _text(gen, "gss_kdc"),
         "gss_domain": _text(gen, "gss_domain"),
     }
@@ -251,6 +253,20 @@ def _d2_check(cfg):
         return False
 
 
+def gss_key_times(s):
+    """(tkey_lifetime, rekey_interval, retry_interval) in seconds. The hook needs
+    retry < rekey < lifetime; anything unusable falls back to 600/120/30."""
+    try:
+        life, rekey = int(s.get("gss_lifetime", 600)), int(s.get("gss_rekey", 120))
+    except (TypeError, ValueError):
+        life, rekey = 600, 120
+    if not (30 <= rekey < life):
+        log("GSS key times %s/%s unusable (need 30 <= renewal < lifetime); using 120/600"
+            % (rekey, life))
+        life, rekey = 600, 120
+    return life, rekey, min(30, rekey - 1)
+
+
 def write_krb5_conf(s, path=None):
     """Generate krb5.conf from the settings, but only over a file this plugin wrote
     (marker) or when none exists: a hand-made Kerberos config is never touched."""
@@ -299,7 +315,9 @@ def gss_hook_entry(s, zones):
                                 "server-principal": "DNS/%s@%s" % (fqdn, s["gss_realm"])})
     if not servers:
         return None
+    life, rekey, retry = gss_key_times(s)
     return {"library": HOOK, "parameters": {
+        "tkey-lifetime": life, "rekey-interval": rekey, "retry-interval": retry,
         "client-principal": s["gss_client_principal"],
         "client-keytab": "FILE:" + s["gss_keytab"],
         "gss-replay-flag": bool(s.get("gss_replay")),
