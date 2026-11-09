@@ -78,7 +78,7 @@
         <label>GSS anti-replay</label>
         <type>checkbox</type>
         <advanced>true</advanced>
-        <help>Enable the GSS anti-replay service. Leave off for Microsoft DNS unless you know it works.</help>
+        <help>Enable the GSS anti-replay service (default). Needed with a Windows Server 2022 DNS server, which refused signed updates without it. The Kea manual warns that some Microsoft DNS servers dislike it; if updates are refused, try switching it off.</help>
     </field>
     <field>
         <id>general.general.aggressive_cleanup</id>

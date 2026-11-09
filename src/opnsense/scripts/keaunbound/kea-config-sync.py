@@ -101,7 +101,7 @@ def load_settings():
         "gss_realm": _text(gen, "gss_realm").upper(),
         "gss_client_principal": _text(gen, "gss_client_principal"),
         "gss_keytab": _text(gen, "gss_keytab", "/usr/local/etc/kea/dhcp.keytab"),
-        "gss_replay": _text(gen, "gss_replay", "0") == "1",
+        "gss_replay": _text(gen, "gss_replay", "1") == "1",
         "gss_servers_text": _text(gen, "gss_servers"),
         "gss_kdc": _text(gen, "gss_kdc"),
         "gss_domain": _text(gen, "gss_domain"),

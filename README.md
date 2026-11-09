@@ -161,8 +161,9 @@ suffix is routed to the listener correctly.
 
 ### GSS-TSIG (Kerberos-signed updates)
 
-*Experimental: the Kea hook loads on OPNsense 26.7, but signed updates against Active
-Directory have not been field-tested yet.*
+*Experimental. Field-tested once: a PTR for a reservation was created in a secure-only
+reverse zone on a Windows Server 2022 DC (Kerberos, AES-256, anti-replay on). Other
+setups are untested.*
 
 OPNsense's Kea package ships **without** the GSS-TSIG hook (`libddns_gss_tsig.so`), although
 the code is part of the open-source Kea since 3.0. This fork builds it in CI
@@ -195,7 +196,8 @@ Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
 3. **Plugin settings:** tick *GSS-TSIG*, enter realm, KDCs and client principal, add the DNS
    servers' host names under *GSS DNS servers* (`10.0.0.10 = dc01.ad.example.com`) and
    end the zone's line in *Reverse zones* with `gss`:
-   `10.in-addr.arpa = 10.0.0.10, 10.0.0.11 gss`. Switch the zone to *Secure only* in
+   `10.in-addr.arpa = 10.0.0.10, 10.0.0.11 gss`. Keep *GSS anti-replay* on (Windows
+   Server 2022 refused signed updates without it). Switch the zone to *Secure only* in
    Windows once it works.
 4. The reverse zone must exist in Windows DNS; a missing one gives the cryptic
    *"Packet was replayed in wrong direction"* error.

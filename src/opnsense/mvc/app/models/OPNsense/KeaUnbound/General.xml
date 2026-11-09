@@ -84,9 +84,9 @@
                 <description>Path of the keytab file for the client principal (readable by root only).</description>
             </gss_keytab>
             <gss_replay type="BooleanField">
-                <Default>0</Default>
+                <Default>1</Default>
                 <Required>Y</Required>
-                <description>GSS anti-replay service. Off by default: Microsoft DNS servers can reject updates with it.</description>
+                <description>GSS anti-replay service. On by default: a Windows Server 2022 DNS server refused updates without it.</description>
             </gss_replay>
             <gss_servers type="TextField">
                 <Required>N</Required>
