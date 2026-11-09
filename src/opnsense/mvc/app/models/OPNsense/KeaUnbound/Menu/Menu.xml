@@ -6,5 +6,8 @@
             <Records order="20" VisibleName="Records" url="/ui/keaunbound/records"/>
             <Settings order="30" VisibleName="Settings" url="/ui/keaunbound/general"/>
         </KeaUnbound>
+        <KeaDHCP>
+            <Addresses order="70" VisibleName="Addresses (leases + reservations)" url="/ui/keaunbound/addresses"/>
+        </KeaDHCP>
     </Services>
 </menu>
