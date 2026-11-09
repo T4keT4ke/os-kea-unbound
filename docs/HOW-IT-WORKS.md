@@ -84,7 +84,7 @@ Build from the OPNsense plugins tree on an OPNsense/FreeBSD host:
 
 ```sh
 git clone https://github.com/opnsense/plugins /usr/plugins
-git clone https://github.com/JameZUK/os-kea-unbound /usr/plugins/dns/kea-unbound
+git clone https://github.com/T4keT4ke/os-kea-unbound /usr/plugins/dns/kea-unbound
 cd /usr/plugins/dns/kea-unbound
 make package          # -> work/pkg/os-kea-unbound-<version>.pkg
 pkg add work/pkg/os-kea-unbound-*.pkg

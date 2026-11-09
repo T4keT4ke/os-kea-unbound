@@ -2,6 +2,11 @@
 
 **OPNsense plugin: automatically register dynamic Kea DHCP leases in Unbound DNS — forward and reverse, with no core-file patching.**
 
+> **Fork.** This is a fork of [JameZUK/os-kea-unbound](https://github.com/JameZUK/os-kea-unbound)
+> (based on its 0.14.2) with a few additions: *All Leases* pages that also list static
+> reservations, PTR registration in an external DNS server (e.g. Active Directory), and an
+> *authoritative* DHCPv4 switch. See *[Additions in this fork](#additions-in-this-fork)*.
+
 When a device picks up a DHCP lease, its hostname starts resolving in Unbound within
 moments (A/AAAA **and** PTR) and keeps resolving across Unbound restarts and reboots,
 for as long as the lease is valid.
@@ -31,12 +36,26 @@ for as long as the lease is valid.
   OPNsense's; the plugin never adds, deletes, or prunes them. To have reserved clients
   resolve by name too, tick **Services → Unbound DNS → General → Register DHCP Static
   Mappings**: OPNsense then registers every Kea reservation that has a hostname, forward
-  and reverse.
+  and reverse. (Core does this for Kea on 26.7; the checkbox is still labelled for ISC.)
 - **Survives restarts** — records persist across Unbound restarts and reboots, no
   repopulation wait.
 - **Secure by default** — TSIG-authenticated; the listener rejects unsigned,
   wrong-key, and wrong-algorithm updates.
 - **Clean uninstall** — nothing in core is patched, so there is nothing to undo.
+
+## Additions in this fork
+
+- **All Leases IPv4 / IPv6** (Services → Kea DHCP): OPNsense's *Leases DHCPv4/v6* view,
+  extended with the static reservations whose device holds no lease right now (state
+  *reserved (no lease)*). Grouped by interface, with MAC vendor, state, static/dynamic and
+  the same add/find reservation and delete actions. One list shows which addresses are
+  taken — static and dynamic.
+- **Reverse zones (PTR)** *(experimental, not yet field-tested)*: register PTR records for
+  listed reverse zones straight at an external DNS server through Kea's DDNS daemon
+  (D2), replacing hand-made `nsupdate` hook scripts. Needs zones that allow
+  non-secure dynamic updates; GSS-TSIG (Kerberos) is not wired in yet. See *Configure*.
+- **Authoritative DHCPv4** *(experimental, not yet field-tested)*: Kea answers requests for
+  unknown addresses with a NAK right away instead of ignoring them.
 
 ## Requirements
 
@@ -46,23 +65,20 @@ for as long as the lease is valid.
 
 ## Install
 
-**OPNsense 26.7+ (FreeBSD 15):**
+**OPNsense 26.7+ (FreeBSD 15, amd64) — this fork:**
 
 ```sh
-pkg add https://github.com/JameZUK/os-kea-unbound/releases/download/v0.14.2/os-kea-unbound-0.14.2.pkg
+pkg add https://github.com/T4keT4ke/os-kea-unbound/releases/download/v0.16.2/os-kea-unbound-0.16.2.pkg
 ```
 
-**OPNsense 26.1 (FreeBSD 14):**
+Packages are architecture-stamped (`FreeBSD:15:amd64`), so this one won't install on
+FreeBSD 14. This fork publishes FreeBSD 15 packages only. On **OPNsense 26.1
+(FreeBSD 14)** use the [upstream plugin](https://github.com/JameZUK/os-kea-unbound/releases)
+(0.14.0) or [build from source](docs/HOW-IT-WORKS.md#build-from-source), which always
+matches your running system.
 
-```sh
-pkg add https://github.com/JameZUK/os-kea-unbound/releases/download/v0.14.0/os-kea-unbound-0.14.0.pkg
-```
-
-Packages are architecture-stamped, so use the one that matches your release — a
-FreeBSD 15 package won't install on FreeBSD 14 and vice versa. Prebuilt FreeBSD 14
-packages stop at 0.14.0, so on 26.1 you won't get the reverse-DNS fixes in 0.14.2.
-[Build from source](docs/HOW-IT-WORKS.md#build-from-source) to get them, or upgrade to
-26.7. Building from source always matches your running system.
+If the fork's package is already installed, add `-f` to `pkg add` to reinstall over it.
+Disable the plugin first when switching from the upstream package.
 
 ### The "misconfigured" / "unknown-repository" label
 
@@ -112,7 +128,7 @@ it — the plugin wires up Kea's DDNS, generates a TSIG key, and seeds existing 
 | Enable | off | Master switch. |
 | Qualifying suffix | *(firewall domain)* | The forward zone; blank uses the system domain. |
 | Authoritative DHCPv4 | off | Kea answers requests for unknown addresses with a NAK at once. |
-| Reverse zones (PTR) | *(empty)* | Advanced. Register PTRs for listed reverse zones straight at an external DNS server (e.g. Active Directory), one line per zone: `124.10.in-addr.arpa = 10.124.1.14, 10.124.0.8` (first server, then fallback). Sent via Kea's DDNS daemon **unsigned**, so the zone must allow non-secure dynamic updates. Listed zones are not written to Unbound. Applies after the next Kea config regeneration (Save/Apply in Kea). |
+| Reverse zones (PTR) † | *(empty)* | Experimental. Register PTRs for listed reverse zones straight at an external DNS server (e.g. Active Directory), one line per zone: `124.10.in-addr.arpa = 10.124.1.14, 10.124.0.8` (first server, then fallback). Sent via Kea's DDNS daemon **unsigned**, so the zone must allow non-secure dynamic updates. Listed zones are not written to Unbound. Applies after the next Kea config regeneration (Save/Apply in Kea). |
 | Aggressive cleanup | on | Drop a host's old address when it moves to a new one. |
 | Update on renew † | on | Refresh DNS on renewals, not just first grant. |
 | TSIG authentication | on | Sign updates with an auto-generated key (unsigned/wrong-key are rejected). |
@@ -153,6 +169,9 @@ the removals to the running Unbound straight away, so there's no need to stop th
 or restart Unbound. It's safe in an HA setup: if it can't confirm a current lease list
 from Kea it does nothing rather than risk removing good records, and it refuses to bulk
 remove an unusually large number at once.
+
+**All Leases IPv4 / IPv6** (under *Services → Kea DHCP*) lists leases and static
+reservations together, see *[Additions in this fork](#additions-in-this-fork)*.
 
 **Records** lists every registered record, enriched with the matching Kea lease detail
 (hostname, MAC/DUID, subnet, source, expiry, TTL) — searchable and sortable.
@@ -197,6 +216,8 @@ Because nothing in core was patched, there is nothing else to undo.
 
 ## Documentation
 
+- **[Upstream project](https://github.com/JameZUK/os-kea-unbound)** — the original
+  plugin by JameZUK; all credit for the DDNS design goes there.
 - **[How it works](docs/HOW-IT-WORKS.md)** — architecture, what it manages and leaves
   alone, why it replaces v3.x, the Unbound "manual overwrites" notice, and building
   from source.
