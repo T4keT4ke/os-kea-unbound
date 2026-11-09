@@ -199,11 +199,13 @@ Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
    `10.in-addr.arpa = 10.0.0.10, 10.0.0.11 gss`. Keep *GSS anti-replay* on (Windows
    Server 2022 refused signed updates without it). Switch the zone to *Secure only* in
    Windows once it works.
-4. Kea keeps a negotiated GSS key for 45 minutes by default, but a Windows Server 2022 DC
-   stopped accepting it after a few minutes (updates were then refused and the log showed
-   `GSS_TSIG_VERIFY_FAILED`). The plugin therefore renews the key every 120 s with a
-   600 s lifetime (*GSS key renewal* / *GSS key lifetime*); lower the renewal interval if
-   updates still fail after a while.
+4. Kea keeps a negotiated GSS key for 45 minutes by default, but Microsoft DNS servers
+   silently drop a key that has been idle for a few minutes (about 165 s according to
+   [Kea issue #2407](https://gitlab.isc.org/isc-projects/kea/-/issues/2407)). Updates are
+   then refused and the log shows `GSS_TSIG_VERIFY_FAILED`; a Windows Server 2022 DC
+   behaved exactly like this here. The plugin therefore renews the key every 90 s with a
+   180 s lifetime (*GSS key renewal* / *GSS key lifetime*); keep the renewal well below
+   165 s.
 5. The reverse zone must exist in Windows DNS; a missing one gives the cryptic
    *"Packet was replayed in wrong direction"* error.
 

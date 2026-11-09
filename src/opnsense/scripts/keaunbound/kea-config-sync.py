@@ -103,8 +103,8 @@ def load_settings():
         "gss_keytab": _text(gen, "gss_keytab", "/usr/local/etc/kea/dhcp.keytab"),
         "gss_replay": _text(gen, "gss_replay", "1") == "1",
         "gss_servers_text": _text(gen, "gss_servers"),
-        "gss_rekey": _text(gen, "gss_rekey_interval", "120"),
-        "gss_lifetime": _text(gen, "gss_tkey_lifetime", "600"),
+        "gss_rekey": _text(gen, "gss_rekey_interval", "90"),
+        "gss_lifetime": _text(gen, "gss_tkey_lifetime", "180"),
         "gss_kdc": _text(gen, "gss_kdc"),
         "gss_domain": _text(gen, "gss_domain"),
     }
@@ -255,15 +255,15 @@ def _d2_check(cfg):
 
 def gss_key_times(s):
     """(tkey_lifetime, rekey_interval, retry_interval) in seconds. The hook needs
-    retry < rekey < lifetime; anything unusable falls back to 600/120/30."""
+    retry < rekey < lifetime; anything unusable falls back to 180/90/30."""
     try:
-        life, rekey = int(s.get("gss_lifetime", 600)), int(s.get("gss_rekey", 120))
+        life, rekey = int(s.get("gss_lifetime", 180)), int(s.get("gss_rekey", 90))
     except (TypeError, ValueError):
-        life, rekey = 600, 120
+        life, rekey = 180, 90
     if not (30 <= rekey < life):
-        log("GSS key times %s/%s unusable (need 30 <= renewal < lifetime); using 120/600"
+        log("GSS key times %s/%s unusable (need 30 <= renewal < lifetime); using 90/180"
             % (rekey, life))
-        life, rekey = 600, 120
+        life, rekey = 180, 90
     return life, rekey, min(30, rekey - 1)
 
 

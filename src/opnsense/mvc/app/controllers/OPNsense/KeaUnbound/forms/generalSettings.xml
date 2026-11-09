@@ -78,14 +78,14 @@
         <label>GSS key renewal (s)</label>
         <type>text</type>
         <advanced>true</advanced>
-        <help>Seconds after which a fresh GSS-TSIG key is negotiated. A Windows DNS server stopped accepting a key after a few minutes, while Kea's own default keeps it for 45. Default 120; lower it if updates start failing again.</help>
+        <help>Seconds after which a fresh GSS-TSIG key is negotiated. Microsoft DNS servers silently drop a GSS key that has been idle for a few minutes (about 165 s, Kea issue #2407), while Kea's own default keeps it for 45 minutes. Default 90; keep it well below that.</help>
     </field>
     <field>
         <id>general.general.gss_tkey_lifetime</id>
         <label>GSS key lifetime (s)</label>
         <type>text</type>
         <advanced>true</advanced>
-        <help>Requested lifetime of a key in seconds; must be longer than the renewal interval. Default 600.</help>
+        <help>Requested lifetime of a key in seconds; must be longer than the renewal interval. Default 180.</help>
     </field>
     <field>
         <id>general.general.gss_replay</id>

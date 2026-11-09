@@ -89,7 +89,7 @@
                 <description>GSS anti-replay service. On by default: a Windows Server 2022 DNS server refused updates without it.</description>
             </gss_replay>
             <gss_rekey_interval type="IntegerField">
-                <Default>120</Default>
+                <Default>90</Default>
                 <Required>Y</Required>
                 <MinimumValue>30</MinimumValue>
                 <MaximumValue>86400</MaximumValue>
@@ -97,7 +97,7 @@
                 <description>Seconds after which Kea negotiates a fresh GSS-TSIG key with the DNS server.</description>
             </gss_rekey_interval>
             <gss_tkey_lifetime type="IntegerField">
-                <Default>600</Default>
+                <Default>180</Default>
                 <Required>Y</Required>
                 <MinimumValue>60</MinimumValue>
                 <MaximumValue>86400</MaximumValue>
