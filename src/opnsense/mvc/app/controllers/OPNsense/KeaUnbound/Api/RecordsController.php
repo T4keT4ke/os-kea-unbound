@@ -20,16 +20,11 @@ use OPNsense\Core\Backend;
  */
 class RecordsController extends ApiControllerBase
 {
-    protected function fetchRows()
-    {
-        return (string)(new Backend())->configdRun('keaunbound records');
-    }
-
     public function searchAction()
     {
         $rows = [];
         try {
-            $out = $this->fetchRows();
+            $out = (string)(new Backend())->configdRun('keaunbound records');
             $decoded = json_decode($out, true);
             if (is_array($decoded)) {
                 $rows = $decoded;

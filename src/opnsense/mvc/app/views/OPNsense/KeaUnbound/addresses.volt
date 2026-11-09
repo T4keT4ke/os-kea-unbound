@@ -1,56 +1,248 @@
 {#
- # Copyright (c) 2026 James (JameZUK) - BSD-2-Clause
+ # Copyright (c) 2023-2025 Deciso B.V.
+ # Copyright (c) 2026 James (JameZUK)
+ # All rights reserved.
+ #
+ # Redistribution and use in source and binary forms, with or without modification,
+ # are permitted provided that the following conditions are met:
+ #
+ # 1. Redistributions of source code must retain the above copyright notice,
+ #    this list of conditions and the following disclaimer.
+ #
+ # 2. Redistributions in binary form must reproduce the above copyright notice,
+ #    this list of conditions and the following disclaimer in the documentation
+ #    and/or other materials provided with the distribution.
+ #
+ # THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ # INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ # AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ # AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ # OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ # SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ # INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ # CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ # POSSIBILITY OF SUCH DAMAGE.
  #}
 
 <script>
-    $(document).ready(function () {
-        $("#grid-addresses").UIBootgrid({
-            search: '/api/keaunbound/addresses/search{{ family }}',
+    $( document ).ready(function() {
+        let selected_interfaces = [];
+        $("#interface-selection").on("changed.bs.select", function (e) {
+            selected_interfaces = $(this).val();
+            $("#grid-leases").bootgrid('reload');
+        })
+
+        $("#grid-leases").UIBootgrid({
+            datakey: 'address',
+            search:'/api/keaunbound/addresses/search{{ family }}/',
+            del:'/api/kea/leases{{ family }}/del_lease/',
+            tabulatorOptions: {
+                groupBy: "if_descr",
+                groupHeader: (value, count, data, group) => {
+                    const displayValue = value ? value : "{{ lang._('Any') }}";
+                    const icons = {
+                        if_descr: '<i class="fa fa-fw fa-ethernet fa-sm text-info"></i>',
+                    };
+                    const countValue = `<span class="badge chip">${count}</span>`;
+                    return `${icons.if_descr} ${displayValue} ${countValue}`;
+                },
+            },
             options: {
-                selection: false,
-                multiSelect: false,
-                rowCount: [20, 50, 100, 200, -1],
-                formatters: {
-                    // escape all free-text columns: record names/hostnames originate
-                    // from DHCP clients, so they must never be rendered as raw HTML.
-                    "esc": function (column, row) {
-                        var v = row[column.id];
-                        return $('<div>').text(v == null ? '' : v).html();
-                    },
-                    "type": function (column, row) {
-                        var cls = row.type === 'static' ? 'label-primary' : 'label-info';
-                        return '<span class="label ' + cls + '">' + $('<div>').text(row.type == null ? '' : row.type).html() + '</span>';
-                    },
-                    "expires": function (column, row) {
-                        if (!row.expires || row.expires == 0) {
-                            return '<span class="text-muted">—</span>';
+                selection: true,
+                multiSelect: true,
+                initialSearchPhrase: getUrlHash('search'),
+                requestHandler: function(request) {
+                    request['selected_interfaces'] = selected_interfaces;
+                    return request;
+                },
+                responseHandler: function (response) {
+                    if (response.interfaces !== undefined) {
+                        let intfsel = $("#interface-selection > option").map(function () {
+                            return $(this).val();
+                        }).get();
+                        for ([intf, descr] of Object.entries(response['interfaces'])) {
+                            if (!intfsel.includes(intf)) {
+                                $("#interface-selection").append($('<option>', {
+                                    value: intf,
+                                    text: descr
+                                }));
+                            }
                         }
-                        var d = new Date(row.expires * 1000);
-                        return d.toLocaleString();
+                        $("#interface-selection").selectpicker('refresh');
                     }
+                    return response;
+                },
+                formatters: {
+                    "overflowformatter": function (column, row) {
+                        return '<span class="overflow">' + row[column.id] + '</span><br/>'
+                    },
+                    "addressformatter": function (column, row) {
+                        return '<span class="overflow">' + row.address + '</span><br/>'
+                    },
+                    "clientidformatter": function (column, row) {
+                        return '<span class="overflow">' + row.client_id + '</span><br/>'
+                    },
+                    "duidformatter": function (column, row) {
+                        return '<span class="overflow">' + row.duid + '</span><br/>'
+                    },
+                    "macformatter": function (column, row) {
+                        let mac = '<span class="overflow">' + row.hwaddr + '</span>';
+                        if (row.mac_info != '') {
+                            mac = mac + '<br/>' + '<small class="overflow"><i>' + row.mac_info + '</i></small>';
+                        }
+                        return mac;
+                    },
+                    "timestamp": function (column, row) {
+                        if (!row[column.id]) {
+                            return '<span class="text-muted">&mdash;</span>';
+                        }
+                        return moment.unix(row[column.id]).local().format('YYYY-MM-DD HH:mm:ss');
+                    },
+                    "reservation": function (column, row) {
+                        return row.is_reserved.length > 0
+                            ? "{{ lang._('static') }}"
+                            : "{{ lang._('dynamic') }}";
+                    },
+                    "state": function (column, row) {
+                        const states = {
+                            0: "{{ lang._('assigned') }}",
+                            1: "{{ lang._('declined') }}",
+                            2: "{{ lang._('expired reclaimed') }}",
+                            3: "{{ lang._('released') }}",
+                            4: "{{ lang._('registered') }}"
+                        };
+                        if (row.state === -1) {
+                            // reservation whose device holds no lease right now
+                            return "{{ lang._('reserved (no lease)') }}";
+                        }
+                        return states[row.state] || row.state;
+                    },
+                    "commands": function (column, row) {
+                        const baseUrl = `/ui/kea/dhcp/v{{ family }}#reservations`;
+                        let searchValue = '';
+
+                        if (row.is_reserved.includes('{{ family == '4' ? 'client_id' : 'duid' }}')) {
+                            searchValue = row.{{ family == '4' ? 'client_id' : 'duid' }} || '';
+                        } else if (row.is_reserved.includes('hwaddr')) {
+                            searchValue = row.hwaddr || '';
+                        }
+
+                        {% if family == '4' %}
+                        const addUrlParams = {
+                            ip_address: row.address || '',
+                            hw_address: row.hwaddr || '',
+                            client_id: row.client_id || '',
+                            hostname: row.hostname || ''
+                        };
+                        {% else %}
+                        const isPrefix = row.type === 'IA_PD';
+                        const addUrlParams = {
+                            ip_address: isPrefix ? '' : (row.address || ''),
+                            prefix: isPrefix ? `${row.address}/${parseInt(row.prefix_len, 10)}` : '',
+                            duid: row.duid || '',
+                            hostname: row.hostname || ''
+                        };
+                        {% endif %}
+
+                        const searchUrl = `${baseUrl}&search=${encodeURIComponent(searchValue)}`;
+                        const addUrl = `${baseUrl}?${new URLSearchParams(addUrlParams)}`;
+
+                        let reservationBtn;
+
+                        if (row.is_reserved.length > 0) {
+                            reservationBtn = $(`
+                                <button type="button" class="btn btn-xs" data-toggle="tooltip"
+                                    title="{{ lang._('Find Reservation') }}">
+                                    <i class="fa fa-fw fa-search"></i>
+                                </button>
+                            `).on('click', function () {
+                                window.location.href = searchUrl;
+                            });
+                        } else {
+                            reservationBtn = $(`
+                                <button type="button" class="btn btn-xs" data-toggle="tooltip"
+                                    title="{{ lang._('Add Reservation') }}">
+                                    <i class="fa fa-fw fa-plus"></i>
+                                </button>
+                            `).on('click', function () {
+                                window.location.href = addUrl;
+                            });
+                        }
+
+                        if (row.state === -1) {
+                            // nothing to delete: no lease exists for this reservation
+                            return $('<div class="btn-group"></div>').append(reservationBtn)[0];
+                        }
+
+                        const deleteBtn = $(`
+                            <button type="button" class="btn btn-xs btn-default command-delete bootgrid-tooltip"
+                                data-row-id="${row.address}"
+                                title="{{ lang._('Delete Lease') }}">
+                                <span class="fa fa-fw fa-trash-o"></span>
+                            </button>
+                        `);
+
+                        return $('<div class="btn-group"></div>').append(reservationBtn).append(deleteBtn)[0];
+                    },
                 }
             }
         });
+
+        $("#interface-selection-wrapper").detach().insertAfter('#grid-leases-header .search');
+
+        updateServiceControlUI('kea');
     });
 </script>
 
-<div class="content-box" style="padding: 1em;">
-    <p class="text-muted" style="margin-bottom: 1em;">
-        {{ lang._('All addresses Kea has handed out or reserved: active leases plus static reservations, including those whose device is offline. Use the search box to filter; click a column header to sort.') }}
-    </p>
-    <table id="grid-addresses" class="table table-condensed table-hover table-striped"
-           data-store-selection="false">
+<style>
+.overflow {
+    text-overflow: clip;
+    white-space: normal;
+    word-break: break-word;
+}
+</style>
+
+<ul class="nav nav-tabs" data-tabs="tabs" id="maintabs"></ul>
+<div class="tab-content content-box col-xs-12 __mb">
+    <div class="btn-group" id="interface-selection-wrapper">
+        <select class="selectpicker" multiple="multiple" data-live-search="true" id="interface-selection" data-width="auto" title="All Interfaces">
+        </select>
+    </div>
+    <table id="grid-leases" class="table table-condensed table-hover table-striped table-responsive">
         <thead>
             <tr>
-                <th data-column-id="address" data-sortable="true" data-formatter="esc">{{ lang._('Address') }}</th>
-                <th data-column-id="type" data-sortable="true" data-width="7em" data-formatter="type">{{ lang._('Type') }}</th>
-                <th data-column-id="status" data-sortable="true" data-width="8em" data-formatter="esc">{{ lang._('Status') }}</th>
-                <th data-column-id="hostname" data-sortable="true" data-formatter="esc">{{ lang._('Hostname') }}</th>
-                <th data-column-id="hwaddr" data-sortable="true" data-formatter="esc">{{ lang._('MAC / DUID') }}</th>
-                <th data-column-id="subnet" data-sortable="true" data-width="6em" data-formatter="esc">{{ lang._('Subnet') }}</th>
-                <th data-column-id="expires" data-sortable="true" data-formatter="expires">{{ lang._('Expires') }}</th>
+                <th data-column-id="if_descr" data-type="string">{{ lang._('Interface') }}</th>
+                <th data-column-id="sort_address" data-identifier="true" data-type="string" data-formatter="addressformatter">{{ lang._('IP Address') }}</th>
+                {% if family == '6' %}
+                <th data-column-id="prefix_len" data-type="string" data-width="4em">{{ lang._('Length') }}</th>
+                <th data-column-id="type" data-type="string" data-width="4em">{{ lang._('Type') }}</th>
+                <th data-column-id="sort_duid" data-type="string" data-formatter="duidformatter" data-width="18em">{{ lang._('DUID') }}</th>
+                <th data-column-id="iaid" data-type="string" data-width="4em">{{ lang._('IAID') }}</th>
+                {% endif %}
+                <th data-column-id="sort_hwaddr" data-type="string" data-formatter="macformatter" data-width="9em">{{ lang._('MAC Address') }}</th>
+                {% if family == '4' %}
+                <th data-column-id="sort_client_id" data-type="string" data-formatter="clientidformatter" data-width="9em">{{ lang._('Client ID') }}</th>
+                {% endif %}
+                <th data-column-id="valid_lifetime" data-width="6em" data-type="integer">{{ lang._('Lifetime') }}</th>
+                <th data-column-id="expire" data-type="string" data-formatter="timestamp">{{ lang._('Expire') }}</th>
+                <th data-column-id="hostname" data-type="string" data-formatter="overflowformatter">{{ lang._('Hostname') }}</th>
+                <th data-column-id="state" data-type="string" data-formatter="state" data-width="8em">{{ lang._('State') }}</th>
+                <th data-column-id="lease_type" data-type="string" data-formatter="reservation" data-width="6em">{{ lang._('Lease Type') }}</th>
+                <th data-column-id="commands" data-formatter="commands" data-sortable="false">{{ lang._('Commands') }}</th>
             </tr>
         </thead>
-        <tbody></tbody>
+        <tbody>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>
+                    <button data-action="deleteSelected" type="button" class="btn btn-xs btn-default">
+                        <span class="fa fa-trash-o fa-fw"></span>
+                    </button>
+                </td>
+            </tr>
+        </tfoot>
+        </tr>
     </table>
 </div>

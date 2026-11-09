@@ -1,4 +1,5 @@
 import importlib.util
+import ipaddress
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -12,24 +13,34 @@ def load():
     return m
 
 
-def test_reservation_rows_global_and_subnet():
+def test_reservations_global_and_subnet():
     m = load()
     cfg = {"Dhcp4": {"reservations": [{"ip-address": "10.0.0.2", "hostname": "g"}],
                      "subnet4": [{"id": 3, "reservations": [
-                         {"ip-address": "10.0.0.9", "hostname": "p", "hw-address": "aa:bb"}]}]}}
-    assert m.reservation_rows(cfg, "4") == [("10.0.0.2", "g", "", ""),
-                                            ("10.0.0.9", "p", "aa:bb", "3")]
-    assert m.reservation_rows(None, "4") == []
+                         {"ip-address": "10.0.0.9", "hostname": "p", "hw-address": "aa:bb",
+                          "client-id": "01:aa"}]}]}}
+    r = m.reservations(cfg, "4")
+    assert [(x["ip"], x["hostname"], x["subnet"]) for x in r] == [
+        ("10.0.0.2", "g", ""), ("10.0.0.9", "p", "3")]
+    assert r[1]["client_id"] == "01aa"            # colons stripped, like core
+    assert m.reservations(None, "4") == []
 
 
-def test_build_rows_merges_static_and_dynamic():
+def test_build_records_merges_static_dynamic_and_offline():
     m = load()
-    resv = [("10.0.0.9", "printer", "aa:bb", "3"), ("10.0.0.2", "offline", "cc:dd", "3")]
-    leases = [("10.0.0.9", "printer-lease", "aa:bb", "3", 500),
-              ("10.0.0.50", "laptop", "ee:ff", "3", 900)]
-    rows = {r["address"]: r for r in m.build_rows(resv, leases)}
-    assert rows["10.0.0.9"]["type"] == "static" and rows["10.0.0.9"]["status"] == "active"
-    assert rows["10.0.0.9"]["hostname"] == "printer" and rows["10.0.0.9"]["expires"] == 500
-    assert rows["10.0.0.2"]["status"] == "reserved"          # offline reservation still listed
-    assert rows["10.0.0.50"]["type"] == "dynamic"
-    assert [r["address"] for r in m.build_rows(resv, leases)] == ["10.0.0.2", "10.0.0.9", "10.0.0.50"]
+    ranges = {ipaddress.ip_network("10.0.0.0/24"): "vlan10"}
+    resvs = [{"ip": "10.0.0.9", "hostname": "printer", "hwaddr": "aa:bb", "client_id": "",
+              "duid": "", "subnet": "3"},
+             {"ip": "10.0.0.2", "hostname": "offline", "hwaddr": "cc:dd", "client_id": "01cc",
+              "duid": "", "subnet": "3"}]
+    leases = [{"ip-address": "10.0.0.9", "hw-address": "aa:bb", "hostname": "printer",
+               "state": 0, "cltt": 100, "valid-lft": 400, "subnet-id": 3},
+              {"ip-address": "10.0.0.50", "hw-address": "ee:ff", "hostname": "laptop",
+               "state": 0, "cltt": 200, "valid-lft": 700}]
+    rows = {r["address"]: r for r in m.build_records("4", resvs, leases, ranges)}
+    assert rows["10.0.0.9"]["is_reserved"] == ["hwaddr"] and rows["10.0.0.9"]["state"] == 0
+    assert rows["10.0.0.9"]["expire"] == 500 and rows["10.0.0.9"]["if"] == "vlan10"
+    assert rows["10.0.0.2"]["state"] == m.NO_LEASE      # offline reservation still listed
+    assert rows["10.0.0.2"]["is_reserved"] == ["hwaddr", "client_id"]
+    assert rows["10.0.0.50"]["is_reserved"] == [] and rows["10.0.0.50"]["if"] == "vlan10"
+    assert len(rows) == 3
