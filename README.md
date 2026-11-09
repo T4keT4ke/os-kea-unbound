@@ -49,7 +49,9 @@ for as long as the lease is valid.
   extended with the static reservations whose device holds no lease right now (state
   *reserved (no lease)*). Grouped by interface, with MAC vendor, state, static/dynamic and
   the same add/find reservation and delete actions. One list shows which addresses are
-  taken — static and dynamic.
+  taken — static and dynamic. Deleting a lease here also asks Kea to remove its DNS
+  records (`update-ddns`); OPNsense's own *Leases DHCPv4/v6* pages only delete the lease
+  and leave the DNS records behind.
 - **Reverse zones (PTR)** *(experimental, not yet field-tested)*: register PTR records for
   listed reverse zones straight at an external DNS server through Kea's DDNS daemon
   (D2), replacing hand-made `nsupdate` hook scripts. Needs zones that allow
@@ -163,8 +165,9 @@ suffix is routed to the listener correctly.
 
 *Experimental. Field-tested on one setup: a Windows Server 2022 DC, AES-256 Kerberos,
 secure-only reverse zone, anti-replay on. A PTR for a reservation was added, and removed
-(`lease4-del` with `update-ddns`) after 15 minutes of idle time. Other setups are
-untested.*
+(`lease4-del` with `update-ddns`) after 15 minutes of idle time, but the Kea log of that
+removal was not checked, so the removal after idle time is not confirmed. Other setups
+are untested.*
 
 OPNsense's Kea package ships **without** the GSS-TSIG hook (`libddns_gss_tsig.so`), although
 the code is part of the open-source Kea since 3.0. This fork builds it in CI

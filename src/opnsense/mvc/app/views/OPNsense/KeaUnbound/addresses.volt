@@ -36,7 +36,7 @@
         $("#grid-leases").UIBootgrid({
             datakey: 'address',
             search:'/api/keaunbound/addresses/search{{ family }}/',
-            del:'/api/kea/leases{{ family }}/del_lease/',
+            del:'/api/keaunbound/addresses/delLease{{ family }}/',
             tabulatorOptions: {
                 groupBy: "if_descr",
                 groupHeader: (value, count, data, group) => {
@@ -179,7 +179,7 @@
                         const deleteBtn = $(`
                             <button type="button" class="btn btn-xs btn-default command-delete bootgrid-tooltip"
                                 data-row-id="${row.address}"
-                                title="{{ lang._('Delete Lease') }}">
+                                title="{{ lang._('Delete Lease and its DNS records') }}">
                                 <span class="fa fa-fw fa-trash-o"></span>
                             </button>
                         `);

@@ -14,6 +14,7 @@
 namespace OPNsense\KeaUnbound\Api;
 
 use OPNsense\Base\ApiControllerBase;
+use OPNsense\Base\UserException;
 use OPNsense\Core\Backend;
 use OPNsense\Core\Config;
 
@@ -27,6 +28,40 @@ class AddressesController extends ApiControllerBase
     public function search6Action()
     {
         return $this->search('6');
+    }
+
+    /**
+     * Delete leases like OPNsense's own page does, but with update-ddns so Kea also
+     * removes the lease's DNS records (core's action sends only the address).
+     */
+    public function delLease4Action($ips = null)
+    {
+        return $this->delLease($ips);
+    }
+
+    public function delLease6Action($ips = null)
+    {
+        return $this->delLease($ips);
+    }
+
+    private function delLease($ips)
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'error', 'message' => gettext('Invalid request method')];
+        } elseif (empty($ips) || !preg_match('/^[0-9a-fA-F:.,]+$/', $ips)) {
+            return ['status' => 'error', 'message' => gettext('Missing or invalid lease IP parameter')];
+        }
+        $results = json_decode((new Backend())->configdpRun('keaunbound lease-delete', [$ips]), true);
+        if (!is_array($results)) {
+            throw new UserException(gettext('Invalid backend response'));
+        }
+        if (!empty($results['failed'])) {
+            throw new UserException(sprintf(
+                gettext('Failed to delete lease(s): %s'),
+                implode(', ', $results['failed'])
+            ));
+        }
+        return ['status' => 'ok'];
     }
 
     private function search($family)
