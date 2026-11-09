@@ -161,9 +161,10 @@ suffix is routed to the listener correctly.
 
 ### GSS-TSIG (Kerberos-signed updates)
 
-*Experimental. Field-tested once: a PTR for a reservation was created in a secure-only
-reverse zone on a Windows Server 2022 DC (Kerberos, AES-256, anti-replay on). Other
-setups are untested.*
+*Experimental. Field-tested on one setup: a Windows Server 2022 DC, AES-256 Kerberos,
+secure-only reverse zone, anti-replay on. A PTR for a reservation was added, and removed
+(`lease4-del` with `update-ddns`) after 15 minutes of idle time. Other setups are
+untested.*
 
 OPNsense's Kea package ships **without** the GSS-TSIG hook (`libddns_gss_tsig.so`), although
 the code is part of the open-source Kea since 3.0. This fork builds it in CI
