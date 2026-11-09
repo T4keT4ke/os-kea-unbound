@@ -97,7 +97,8 @@
                         if (!row[column.id]) {
                             return '<span class="text-muted">&mdash;</span>';
                         }
-                        return moment.unix(row[column.id]).local().format('YYYY-MM-DD HH:mm:ss');
+                        // sv-SE yields 'YYYY-MM-DD HH:mm:ss' in local time without needing moment.js
+                        return new Date(row[column.id] * 1000).toLocaleString('sv-SE');
                     },
                     "reservation": function (column, row) {
                         return row.is_reserved.length > 0
