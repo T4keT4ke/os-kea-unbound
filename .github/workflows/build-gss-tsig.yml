@@ -35,7 +35,7 @@ jobs:
             CONF
             pkg update -r OPNsense
             pkg install -y -r OPNsense boost-libs log4cplus openssl35
-            pkg info boost-libs log4cplus openssl35 | grep -E '^Name|^Version'
+            pkg info boost-libs log4cplus openssl35
           run: |
             set -eux
             fetch -q "https://downloads.isc.org/isc/kea/${KEA_VERSION}/kea-${KEA_VERSION}.tar.xz"
