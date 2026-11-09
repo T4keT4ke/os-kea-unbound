@@ -64,7 +64,7 @@
         <label>Keytab file</label>
         <type>text</type>
         <advanced>true</advanced>
-        <help>Path of the keytab on the firewall (mode 600, owned by root). Default /usr/local/etc/kea/dhcp.keytab.</help>
+        <help>Where the uploaded keytab is stored on the firewall (mode 600, owned by root; upload it at the top of this page). Must be under /usr/local/etc/. Default /usr/local/etc/kea/dhcp.keytab.</help>
     </field>
     <field>
         <id>general.general.gss_servers</id>

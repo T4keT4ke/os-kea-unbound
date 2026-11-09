@@ -184,8 +184,11 @@ Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
 1. **AD:** create a user for the firewall, set its SPN and export a keytab on a DC:
    `setspn -S DHCP/fw.ad.example.com kea` and
    `ktpass -princ DHCP/fw.ad.example.com@AD.EXAMPLE.COM -mapuser kea +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL -out dhcp.keytab`
-2. **Firewall:** copy the keytab to `/usr/local/etc/kea/dhcp.keytab` (`chmod 600`),
-   install `pkg install krb5`. Time must be in sync with the DC. `krb5.conf` can come
+2. **Firewall:** upload the keytab in the plugin settings (*GSS-TSIG keytab*; it is stored
+   as `/usr/local/etc/kea/dhcp.keytab`, mode 600, never in `config.xml`), and
+   `pkg install krb5`. Use one account and keytab per firewall if you can: you can then
+   revoke a site on its own, and running `ktpass` again for a shared principal
+   invalidates every copy. Time must be in sync with the DC. `krb5.conf` can come
    from the plugin: enter the KDCs (and optionally the DNS domain) in the settings and
    it writes `/usr/local/etc/krb5.conf` (the file is marked as managed; a `krb5.conf`
    you made yourself is never overwritten). Leave the KDC field empty to manage it by hand.
