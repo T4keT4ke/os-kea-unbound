@@ -34,8 +34,8 @@ jobs:
             }
             CONF
             pkg update -r OPNsense
-            pkg install -y -r OPNsense boost-libs log4cplus openssl35
-            pkg info boost-libs log4cplus openssl35
+            pkg install -y -r OPNsense boost-libs log4cplus openssl35 krb5
+            pkg info boost-libs log4cplus openssl35 krb5
           run: |
             set -eux
             fetch -q "https://downloads.isc.org/isc/kea/${KEA_VERSION}/kea-${KEA_VERSION}.tar.xz"
@@ -49,6 +49,8 @@ jobs:
             mkdir -p ../out
             cp _build/src/hooks/d2/gss_tsig/libddns_gss_tsig.so ../out/
             readelf -d ../out/libddns_gss_tsig.so | grep -E 'NEEDED|RPATH|RUNPATH' | tee ../out/needed.txt
+            # must link OPNsense's krb5 package (libgssapi_krb5.so.2), not the base system's
+            grep -q 'libgssapi_krb5.so.2\]' ../out/needed.txt
         env:
           KEA_VERSION: ${{ inputs.kea_version }}
       - uses: actions/upload-artifact@v4
