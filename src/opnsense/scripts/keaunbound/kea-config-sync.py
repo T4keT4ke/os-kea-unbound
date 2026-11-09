@@ -33,6 +33,7 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lib import suffix as suffixmod  # noqa: E402
+from lib import reverse as reversemod  # noqa: E402
 
 CONFIG = "/conf/config.xml"
 KEA4 = "/usr/local/etc/kea/kea-dhcp4.conf"
@@ -89,6 +90,8 @@ def load_settings():
         "tsig_name": (_text(gen, "tsig_key_name", "keaunbound") or "keaunbound"),
         "tsig_secret": tsig_secret,
         "tsig_algo": KEA_ALGO.get(_text(gen, "tsig_algorithm", "hmac-sha256"), "HMAC-SHA256"),
+        "authoritative": _text(gen, "authoritative", "0") == "1",
+        "reverse_zones_text": _text(gen, "reverse_zones"),
     }
 
 
@@ -182,6 +185,11 @@ def patch_dhcp(path, root_key, s):
     ddns_block.update(required)
     node["dhcp-ddns"] = ddns_block
     node["ddns-update-on-renew"] = bool(s.get("update_on_renew", True))
+    # DHCPv4 only: answer INIT-REBOOT for unknown leases with a NAK right away. Core
+    # never writes this key (and every regeneration drops our previous one), so an
+    # unset option simply leaves it out.
+    if root_key == "Dhcp4" and s.get("authoritative"):
+        node["authoritative"] = True
     # OPNsense emits a per-subnet "ddns-send-updates": false (no per-subnet DDNS
     # server is set), which would OVERRIDE our global true via Kea's subnet>global
     # inheritance. Strip ONLY that false default (never an explicit user true) so
@@ -245,12 +253,19 @@ def patch_d2(path, s):
     our_fwd = [catchall(z) for z in suffix_zones] + [catchall(CATCHALL_FWD)]
     d2["forward-ddns"] = {"ddns-domains": user_fwd + our_fwd}
 
-    # Reverse: keep user domains, (re)add our in-addr.arpa./ip6.arpa. catch-alls.
+    # Reverse: keep user domains, add the configured reverse zones (PTRs go straight
+    # to the given DNS servers, unsigned; D2 picks the longest matching zone) and
+    # (re)add our in-addr.arpa./ip6.arpa. catch-alls for everything else.
+    zones = s.get("reverse_zones") or []
+    our_zone_names = {z for z, _ in zones}
     rev = (d2.get("reverse-ddns") or {}).get("ddns-domains") or []
-    user_rev = [d for d in rev if d.get("name") not in CATCHALL_REV]
+    user_rev = [d for d in rev if d.get("name") not in CATCHALL_REV
+                and d.get("name") not in our_zone_names]
     if user_rev:
         log("preserving %d user reverse DDNS domain(s); adding catch-all" % len(user_rev))
-    d2["reverse-ddns"] = {"ddns-domains": user_rev + [catchall(n) for n in CATCHALL_REV]}
+    ours = [{"name": z, "dns-servers": [{"ip-address": ip, "port": 53} for ip in ips]}
+            for z, ips in zones]
+    d2["reverse-ddns"] = {"ddns-domains": user_rev + ours + [catchall(n) for n in CATCHALL_REV]}
 
     # TSIG: keep user keys (different name), (re)add ours.
     keys = d2.get("tsig-keys") or []
@@ -290,6 +305,9 @@ def main():
     if s is None:
         print("keaunbound: disabled/unreadable — no DDNS injection")
         return 0
+    s["reverse_zones"], bad = reversemod.parse_reverse_zones(s.get("reverse_zones_text", ""))
+    for line in bad:
+        log("ignoring invalid reverse zone line: %r" % line)
     s["d2_ip"], s["d2_port"] = _d2_listen(D2)
     s["suffixes"] = _collect_suffixes(s["suffix"])
     changed = []

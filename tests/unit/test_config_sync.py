@@ -157,6 +157,40 @@ def test_patch_d2_preserves_user_config(tmp_path):
     assert m.patch_d2(str(p), SETTINGS) is False               # idempotent
 
 
+def test_patch_d2_reverse_zones(tmp_path):
+    # configured reverse zones go straight to the given servers (no TSIG key, longest
+    # match beats our in-addr.arpa. catch-all); a user domain with the same name is
+    # replaced by ours, other user domains survive.
+    m = load_injector(tmp_path)
+    p = tmp_path / "d2.json"
+    json.dump({"DhcpDdns": {"reverse-ddns": {"ddns-domains": [
+        {"name": "124.10.in-addr.arpa.", "dns-servers": [{"ip-address": "1.1.1.1"}]},
+        {"name": "5.5.5.in-addr.arpa.", "dns-servers": [{"ip-address": "10.0.0.53"}]}]}}},
+        open(p, "w"))
+    s = dict(SETTINGS, reverse_zones=[("124.10.in-addr.arpa.", ["10.124.1.14", "10.124.0.8"])])
+    assert m.patch_d2(str(p), s) is True
+    rev = json.load(open(p))["DhcpDdns"]["reverse-ddns"]["ddns-domains"]
+    assert [d["name"] for d in rev] == ["5.5.5.in-addr.arpa.", "124.10.in-addr.arpa.",
+                                         "in-addr.arpa.", "ip6.arpa."]
+    ours = rev[1]
+    assert ours["dns-servers"] == [{"ip-address": "10.124.1.14", "port": 53},
+                                   {"ip-address": "10.124.0.8", "port": 53}]
+    assert "key-name" not in ours
+    assert m.patch_d2(str(p), s) is False                      # idempotent
+
+
+def test_patch_dhcp_authoritative(tmp_path):
+    m = load_injector(tmp_path)
+    for key, want in (("Dhcp4", True), ("Dhcp6", False)):
+        p = tmp_path / (key + ".json")
+        json.dump({key: {}}, open(p, "w"))
+        m.patch_dhcp(str(p), key, dict(SETTINGS, authoritative=True))
+        assert ("authoritative" in json.load(open(p))[key]) is want   # v4 only
+    json.dump({"Dhcp4": {}}, open(p, "w"))
+    m.patch_dhcp(str(p), "Dhcp4", SETTINGS)                    # option off -> key absent
+    assert "authoritative" not in json.load(open(p))["Dhcp4"]
+
+
 def test_disabled_plugin_yields_no_settings(tmp_path):
     m = load_injector(tmp_path)
     cfg = tmp_path / "config.xml"

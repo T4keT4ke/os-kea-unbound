@@ -12,6 +12,19 @@
         <help>Domain appended to bare hostnames to form FQDNs. Leave blank to use the firewall's domain.</help>
     </field>
     <field>
+        <id>general.general.authoritative</id>
+        <label>Authoritative DHCPv4</label>
+        <type>checkbox</type>
+        <help>Kea answers requests for addresses it does not know with a NAK at once, instead of ignoring them (clients then fall back to DISCOVER immediately).</help>
+    </field>
+    <field>
+        <id>general.general.reverse_zones</id>
+        <label>Reverse zones (PTR)</label>
+        <type>textbox</type>
+        <advanced>true</advanced>
+        <help>Register PTR records for these reverse zones directly at an external DNS server (e.g. Active Directory), unsigned: the zone must allow non-secure dynamic updates. One zone per line, "zone = server[, fallback]", e.g. 10.in-addr.arpa = 192.0.2.10, 192.0.2.11. Zones listed here are not written to Unbound. Lines starting with # are comments.</help>
+    </field>
+    <field>
         <id>general.general.aggressive_cleanup</id>
         <label>Aggressive cleanup</label>
         <type>checkbox</type>

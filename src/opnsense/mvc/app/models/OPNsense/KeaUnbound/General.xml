@@ -42,6 +42,16 @@
                 <Mask>/^[0-9a-zA-Z+\/=]{0,128}$/u</Mask>
                 <description>Auto-generated base64 secret. Managed by the plugin; normally not edited by hand.</description>
             </tsig_key_secret>
+            <authoritative type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+                <description>Make Kea DHCPv4 authoritative: answer requests for unknown leases with a NAK immediately.</description>
+            </authoritative>
+            <reverse_zones type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9A-Za-z.:,;=#\s_-]{0,4096}$/u</Mask>
+                <description>Reverse zones whose PTR records Kea registers directly at an external DNS server, one per line: zone = server[, fallback server].</description>
+            </reverse_zones>
             <aggressive_cleanup type="BooleanField">
                 <Default>1</Default>
                 <Required>Y</Required>

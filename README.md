@@ -111,6 +111,8 @@ it — the plugin wires up Kea's DDNS, generates a TSIG key, and seeds existing 
 |---|---|---|
 | Enable | off | Master switch. |
 | Qualifying suffix | *(firewall domain)* | The forward zone; blank uses the system domain. |
+| Authoritative DHCPv4 | off | Kea answers requests for unknown addresses with a NAK at once. |
+| Reverse zones (PTR) | *(empty)* | Advanced. Register PTRs for listed reverse zones straight at an external DNS server (e.g. Active Directory), one line per zone: `124.10.in-addr.arpa = 10.124.1.14, 10.124.0.8` (first server, then fallback). Sent via Kea's DDNS daemon **unsigned**, so the zone must allow non-secure dynamic updates. Listed zones are not written to Unbound. Applies after the next Kea config regeneration (Save/Apply in Kea). |
 | Aggressive cleanup | on | Drop a host's old address when it moves to a new one. |
 | Update on renew † | on | Refresh DNS on renewals, not just first grant. |
 | TSIG authentication | on | Sign updates with an auto-generated key (unsigned/wrong-key are rejected). |
