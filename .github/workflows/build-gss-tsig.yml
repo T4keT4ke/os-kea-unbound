@@ -50,10 +50,11 @@ jobs:
             cp _build/src/hooks/d2/gss_tsig/libddns_gss_tsig.so ../out/
             readelf -d ../out/libddns_gss_tsig.so | grep -E 'NEEDED|RPATH|RUNPATH' | tee ../out/needed.txt
             # must link OPNsense's krb5 package (libgssapi_krb5.so.2), not the base system's
-            grep -q 'libgssapi_krb5.so.2\]' ../out/needed.txt
+            grep -q 'libgssapi_krb5.so.2' ../out/needed.txt
         env:
           KEA_VERSION: ${{ inputs.kea_version }}
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: libddns_gss_tsig-${{ inputs.kea_version }}
           path: out/
