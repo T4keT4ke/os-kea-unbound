@@ -165,9 +165,9 @@ suffix is routed to the listener correctly.
 
 *Experimental. Field-tested on one setup: a Windows Server 2022 DC, AES-256 Kerberos,
 secure-only reverse zone, anti-replay on. A PTR for a reservation was added, and removed
-(`lease4-del` with `update-ddns`) after 15 minutes of idle time, but the Kea log of that
-removal was not checked, so the removal after idle time is not confirmed. Other setups
-are untested.*
+(`lease4-del` with `update-ddns`) after 15 minutes of idle time: the PTR was gone
+afterwards, but no matching `REMOVE_SUCCEEDED` line showed up in the Kea log. Other
+setups are untested.*
 
 OPNsense's Kea package ships **without** the GSS-TSIG hook (`libddns_gss_tsig.so`), although
 the code is part of the open-source Kea since 3.0. This fork builds it in CI
