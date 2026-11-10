@@ -1,0 +1,7 @@
+#!/bin/sh
+# os-kea-unbound: after an OPNsense update, make sure the optional GSS-TSIG hook still
+# matches the installed Kea; drop it (and say so in the plugin log) if it does not.
+# Harmless no-op when the plugin is disabled.
+[ -f /usr/local/opnsense/scripts/keaunbound/hook-guard.py ] || exit 0
+/usr/local/bin/python3 /usr/local/opnsense/scripts/keaunbound/hook-guard.py
+exit 0

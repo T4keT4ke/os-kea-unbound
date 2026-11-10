@@ -1,0 +1,10 @@
+#!/bin/sh
+# os-kea-unbound: daily check that the optional GSS-TSIG hook still loads with the
+# installed Kea (catches an update that bypassed the update hook). No-op when the
+# plugin is disabled or nothing needs to change. Always exits 0.
+[ -x /usr/local/sbin/configctl ] || exit 0
+out=$(/usr/local/sbin/configctl keaunbound hook-guard 2>&1)
+case "$out" in
+    *Traceback*|*failed*) echo "os-kea-unbound hook-guard: $out" ;;
+esac
+exit 0

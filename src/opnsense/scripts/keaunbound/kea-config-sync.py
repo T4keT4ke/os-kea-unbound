@@ -430,11 +430,13 @@ def _collect_suffixes(global_suffix):
     return out
 
 
-def main():
+def run():
+    """Apply the injection. Returns (settings, changed) where changed lists what was
+    rewritten ("krb5.conf", "dhcp4", "dhcp6", "ddns"); settings is None when the plugin
+    is disabled/unreadable."""
     s = load_settings()
     if s is None:
-        print("keaunbound: disabled/unreadable — no DDNS injection")
-        return 0
+        return None, []
     s["reverse_zones"], bad = reversemod.parse_reverse_zones(s.get("reverse_zones_text", ""))
     for line in bad:
         log("ignoring invalid reverse zone line: %r" % line)
@@ -452,6 +454,14 @@ def main():
         changed.append("dhcp6")
     if patch_d2(D2, s):
         changed.append("ddns")
+    return s, changed
+
+
+def main():
+    s, changed = run()
+    if s is None:
+        print("keaunbound: disabled/unreadable — no DDNS injection")
+        return 0
     msg = "DDNS injection -> " + (", ".join(changed) if changed else "(no change)")
     print("keaunbound: " + msg)
     if changed:

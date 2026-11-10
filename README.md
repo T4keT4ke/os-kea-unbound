@@ -184,11 +184,18 @@ updates and the plugin log says why. Before using the hook, the plugin checks it
 update that changed Kea) is left out instead of stopping the DDNS daemon. Rebuild the
 hook for the new Kea version (run the workflow with that version) when that happens.
 
+This check also runs after every OPNsense update (update hook), when the plugin starts and
+once a day, not only on *Apply*: if the hook no longer loads, it is removed from the DDNS
+daemon's config, Kea is restarted and the plugin log says so. Without it the DDNS daemon
+could fail to start on the old config and no DNS updates would be sent at all (DHCP itself
+keeps working). Once a matching hook package is installed, the next run puts it back. The
+hook is built for one Kea version and its libraries (OpenSSL, Kerberos), so rebuild it after
+any update that changes one of them.
+
 Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
 
-1. **AD:** create a user for the firewall, set its SPN and export a keytab on a DC:
-   `setspn -S DHCP/fw.ad.example.com kea` and
-   `ktpass -princ DHCP/fw.ad.example.com@AD.EXAMPLE.COM -mapuser kea +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL -out dhcp.keytab`
+1. **AD:** create an account for the firewall and export its keytab (see
+   *[Creating the keytab](#creating-the-keytab-active-directory)* below).
 2. **Firewall:** upload the keytab in the plugin settings (*GSS-TSIG keytab*; it is stored
    as `/usr/local/etc/kea/dhcp.keytab`, mode 600, never in `config.xml`), and
    `pkg install krb5`. Use one account and keytab per firewall if you can: you can then
@@ -212,6 +219,59 @@ Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
    165 s.
 5. The reverse zone must exist in Windows DNS; a missing one gives the cryptic
    *"Packet was replayed in wrong direction"* error.
+
+### Creating the keytab (Active Directory)
+
+The keytab holds the long-term key of the account the firewall signs in with, so treat it
+like a password: don't send it by mail or chat, delete your local copy after uploading it,
+and use one account (and keytab) per firewall if you can. Names below are placeholders;
+replace `fw01`, `ad.example.com` and `AD.EXAMPLE.COM` with yours. Run the commands in an
+elevated PowerShell on a domain controller.
+
+1. **Create the account.** A normal user account is enough. Give it a long random password
+   (it is replaced in step 3) and let it never expire:
+
+   ```powershell
+   New-ADUser -Name "kea-fw01" -SamAccountName "kea-fw01" -Enabled $true `
+     -PasswordNeverExpires $true -CannotChangePassword $true `
+     -AccountPassword (Read-Host -AsSecureString "Password")
+   ```
+
+2. **Give it the service principal name** the plugin will use as client principal
+   (`DHCP/fw01.ad.example.com`). If `setspn -S` can't find the account, set the attribute
+   directly:
+
+   ```powershell
+   Set-ADUser kea-fw01 -ServicePrincipalNames @{Add="DHCP/fw01.ad.example.com"}
+   Set-ADUser kea-fw01 -KerberosEncryptionType AES256
+   ```
+
+3. **Export the keytab.** `ktpass` sets a new random password on the account and writes the
+   AES-256 key; `-mapuser` must name the account with its NetBIOS domain:
+
+   ```powershell
+   ktpass -princ DHCP/fw01.ad.example.com@AD.EXAMPLE.COM `
+     -mapuser AD\kea-fw01 +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL `
+     -crypto AES256-SHA1 -out dhcp.keytab
+   ```
+
+   Running `ktpass` again for the same account makes every earlier keytab of it useless.
+4. **Upload** `dhcp.keytab` in the plugin settings (*GSS-TSIG keytab*) and delete the
+   local file. The plugin shows only whether a valid keytab is installed, never its content.
+5. **Check it** on the firewall (needs `krb5` and a working `krb5.conf`, see below):
+
+   ```sh
+   kinit -k -t /usr/local/etc/kea/dhcp.keytab DHCP/fw01.ad.example.com@AD.EXAMPLE.COM
+   klist
+   ```
+
+   A ticket for the `krbtgt` of your realm means the keytab and the clock are fine. Typical
+   failures: *Clock skew too great* (time not in sync with the DC), *Client not found*
+   (principal spelled differently from the one in step 2), *Preauthentication failed*
+   (keytab doesn't match the account's current password, e.g. after another `ktpass`).
+
+The client principal in the plugin settings must be exactly the one you gave to `ktpass`.
+The DNS servers are reached as `DNS/<host name>@REALM`, which Windows DCs have by default.
 
 ## Status & Records
 

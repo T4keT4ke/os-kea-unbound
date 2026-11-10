@@ -51,6 +51,9 @@ function keaunbound_configure_do($verbose = false)
     $backend = new \OPNsense\Core\Backend();
     if (keaunbound_enabled()) {
         $backend->configdRun('keaunbound start');
+        // after an update the Kea configs on disk may still name a GSS-TSIG hook that no
+        // longer matches the installed Kea; this drops it (no-op otherwise).
+        $backend->configdRun('keaunbound hook-guard');
     } else {
         $backend->configdRun('keaunbound stop');
     }
