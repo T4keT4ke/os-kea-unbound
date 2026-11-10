@@ -223,55 +223,82 @@ Setup with Active Directory (see the Kea manual, *GSS-TSIG*):
 ### Creating the keytab (Active Directory)
 
 The keytab holds the long-term key of the account the firewall signs in with, so treat it
-like a password: don't send it by mail or chat, delete your local copy after uploading it,
-and use one account (and keytab) per firewall if you can. Names below are placeholders;
-replace `fw01`, `ad.example.com` and `AD.EXAMPLE.COM` with yours. Run the commands in an
-elevated PowerShell on a domain controller.
+like a password: don't send it by mail or chat, and delete your local copy after uploading
+it. Run the commands in an elevated PowerShell on a domain controller.
+
+**Values you need.** The examples use these; replace them with yours:
+
+| Value | Example | How to find it |
+|---|---|---|
+| Account name | `kea-dhcp` | You choose it. |
+| DNS domain | `ad.example.com` | Your AD domain's DNS name. |
+| Realm | `AD.EXAMPLE.COM` | The DNS domain in **capital letters**. |
+| NetBIOS domain | `EXAMPLE` | `(Get-ADDomain).NetBIOSName`. It is often **not** the first label of the DNS domain, so don't guess it. |
+| Principal | `DHCP/kea-dhcp.ad.example.com` | `DHCP/` + a name of your choice + `.` + DNS domain. With the realm: `DHCP/kea-dhcp.ad.example.com@AD.EXAMPLE.COM`. |
+
+**One principal or one per firewall?** All keys of an account are the same, and every
+`ktpass` run for that account replaces them. Two ways to deal with that:
+
+- *One shared principal and keytab for all firewalls* (simplest): create the account once,
+  run `ktpass` once and upload the same keytab everywhere, with the same *Client principal*
+  in every plugin. The host part of the principal does not have to be a firewall's name.
+  Downside: you can't revoke one firewall on its own, and running `ktpass` again for the
+  account makes the keytab on **all** firewalls useless until you upload the new one.
+- *One account per firewall*: repeat the steps below per firewall with its own account and
+  principal. Revoking or re-exporting one site then affects only that site.
+
+Steps (shown for the shared variant; for per-firewall accounts use a different account name
+and principal each time):
 
 1. **Create the account.** A normal user account is enough. Give it a long random password
-   (it is replaced in step 3) and let it never expire:
+   (`ktpass` replaces it in step 3) and let it never expire:
 
    ```powershell
-   New-ADUser -Name "kea-fw01" -SamAccountName "kea-fw01" -Enabled $true `
+   New-ADUser -Name "kea-dhcp" -SamAccountName "kea-dhcp" -Enabled $true `
      -PasswordNeverExpires $true -CannotChangePassword $true `
      -AccountPassword (Read-Host -AsSecureString "Password")
    ```
 
-2. **Give it the service principal name** the plugin will use as client principal
-   (`DHCP/fw01.ad.example.com`). If `setspn -S` can't find the account, set the attribute
-   directly:
+2. **Give it the service principal name** that the plugin uses as *Client principal*
+   (without the realm). Each SPN can belong to only one account in the forest. If
+   `setspn -S` reports that it can't find the account, set the attribute directly:
 
    ```powershell
-   Set-ADUser kea-fw01 -ServicePrincipalNames @{Add="DHCP/fw01.ad.example.com"}
-   Set-ADUser kea-fw01 -KerberosEncryptionType AES256
+   Set-ADUser kea-dhcp -ServicePrincipalNames @{Add="DHCP/kea-dhcp.ad.example.com"}
+   Set-ADUser kea-dhcp -KerberosEncryptionType AES256
    ```
 
 3. **Export the keytab.** `ktpass` sets a new random password on the account and writes the
-   AES-256 key; `-mapuser` must name the account with its NetBIOS domain:
+   AES-256 key. `-mapuser` is `<NetBIOS domain>\<account>`; a wrong domain part fails with
+   `DsCrackNames returned 0x2` / *failed getting target domain*.
 
    ```powershell
-   ktpass -princ DHCP/fw01.ad.example.com@AD.EXAMPLE.COM `
-     -mapuser AD\kea-fw01 +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL `
+   ktpass -princ DHCP/kea-dhcp.ad.example.com@AD.EXAMPLE.COM `
+     -mapuser EXAMPLE\kea-dhcp +rndpass -mapop set -ptype KRB5_NT_PRINCIPAL `
      -crypto AES256-SHA1 -out dhcp.keytab
    ```
 
-   Running `ktpass` again for the same account makes every earlier keytab of it useless.
-4. **Upload** `dhcp.keytab` in the plugin settings (*GSS-TSIG keytab*) and delete the
-   local file. The plugin shows only whether a valid keytab is installed, never its content.
-5. **Check it** on the firewall (needs `krb5` and a working `krb5.conf`, see below):
+   `-princ` is the principal **with** the realm (capital letters); it must match the
+   *Client principal* you enter in the plugin exactly, including upper/lower case.
+4. **Upload** `dhcp.keytab` in the plugin settings (*GSS-TSIG keytab*) on each firewall and
+   delete the local file. The plugin shows only whether a valid keytab is installed, never
+   its content.
+5. **Check it** on the firewall (needs the `krb5` package and a working `krb5.conf`, see
+   step 2 of the setup above):
 
    ```sh
-   kinit -k -t /usr/local/etc/kea/dhcp.keytab DHCP/fw01.ad.example.com@AD.EXAMPLE.COM
+   kinit -k -t /usr/local/etc/kea/dhcp.keytab DHCP/kea-dhcp.ad.example.com@AD.EXAMPLE.COM
    klist
    ```
 
    A ticket for the `krbtgt` of your realm means the keytab and the clock are fine. Typical
    failures: *Clock skew too great* (time not in sync with the DC), *Client not found*
-   (principal spelled differently from the one in step 2), *Preauthentication failed*
-   (keytab doesn't match the account's current password, e.g. after another `ktpass`).
+   (principal spelled differently from the one in step 2, or the SPN wasn't set),
+   *Preauthentication failed* (keytab doesn't match the account's current password, e.g.
+   after another `ktpass`).
 
-The client principal in the plugin settings must be exactly the one you gave to `ktpass`.
-The DNS servers are reached as `DNS/<host name>@REALM`, which Windows DCs have by default.
+The DNS servers are reached as `DNS/<host name>@REALM`, which Windows DCs have by default;
+enter their host names under *GSS DNS servers* as described in the setup above.
 
 ## Status & Records
 
